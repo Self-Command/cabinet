@@ -70,6 +70,7 @@ import { getDataDir } from "@/lib/data-dir-cache";
 import { DepthDropdown } from "@/components/cabinets/depth-dropdown";
 import { isMacPlatform, formatShortcut } from "@/lib/keys";
 import { useLocale } from "@/i18n/use-locale";
+import { slugifyPageName } from "@/lib/markdown/wiki-links";
 
 interface AgentSummary {
   scopedId?: string;
@@ -941,11 +942,7 @@ export function TreeView() {
             setKbCreating(true);
             try {
               await createPage(dataRootPath, kbSubPageTitle.trim());
-              const slug = kbSubPageTitle
-                .trim()
-                .toLowerCase()
-                .replace(/[^a-z0-9]+/g, "-")
-                .replace(/^-|-$/g, "");
+              const slug = slugifyPageName(kbSubPageTitle);
               const nextPath = dataRootPath ? `${dataRootPath}/${slug}` : slug;
               selectPage(nextPath);
               await loadPage(nextPath);

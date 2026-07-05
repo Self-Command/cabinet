@@ -13,6 +13,10 @@ import { invalidateTreeCache } from "@/lib/storage/tree-builder";
 import { autoCommit } from "@/lib/git/git-service";
 import { slugifyPageName } from "@/lib/markdown/wiki-links";
 import { blankOffice, type BlankOfficeKind } from "@/lib/storage/office-templates";
+import {
+  sanitizeUserFileBaseName,
+  sanitizeUserFileExtension,
+} from "@/lib/storage/user-path-slug";
 
 export const dynamic = "force-dynamic";
 
@@ -40,15 +44,6 @@ interface CreateFileRequest {
   name?: string;
   ext?: string;
   googleUrl?: string;
-}
-
-function sanitizeBaseName(name: string): string {
-  return name
-    .trim()
-    .replace(/[/\\]+/g, "-")
-    .replace(/[^a-zA-Z0-9._ -]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
 }
 
 async function uniqueFilePath(
@@ -125,13 +120,11 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Flat file types: code, mermaid, csv, office ───────────────────────
-    const base = sanitizeBaseName(rawName.replace(/\.[^.]+$/, "")) || "untitled";
+    const base =
+      sanitizeUserFileBaseName(rawName.replace(/\.[^.]+$/, "")) || "untitled";
     let ext = "";
     if (type === "code") {
-      ext = (body.ext || ".txt").trim();
-      if (!ext.startsWith(".")) ext = `.${ext}`;
-      ext = ext.toLowerCase().replace(/[^a-z0-9.]/g, "");
-      if (ext === ".") ext = ".txt";
+      ext = sanitizeUserFileExtension(body.ext || ".txt", ".txt");
     } else if (type === "mermaid") {
       ext = ".mermaid";
     } else if (type === "csv") {

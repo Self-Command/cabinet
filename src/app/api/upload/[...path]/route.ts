@@ -5,6 +5,10 @@ import { ensureDirectory, fileExists } from "@/lib/storage/fs-operations";
 import { invalidateTreeCache } from "@/lib/storage/tree-builder";
 import { autoCommit } from "@/lib/git/git-service";
 import { assertWritablePath, ReadOnlySourceError } from "@/lib/knowledge-sources/store";
+import {
+  sanitizeUserFileBaseName,
+  sanitizeUserFileExtension,
+} from "@/lib/storage/user-path-slug";
 import fs from "fs/promises";
 
 type RouteParams = { params: Promise<{ path: string[] }> };
@@ -67,9 +71,12 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       );
     }
 
-    let filename = file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
-    const ext = path.extname(filename);
-    const base = path.basename(filename, ext);
+    const originalExt = path.extname(file.name);
+    const rawBase = originalExt ? file.name.slice(0, -originalExt.length) : file.name;
+    const base =
+      sanitizeUserFileBaseName(rawBase, { preserveSpaces: false }) || "upload";
+    const ext = sanitizeUserFileExtension(originalExt);
+    let filename = `${base}${ext}`;
     let filePath = path.join(resolved, filename);
     let counter = 1;
 
@@ -102,11 +109,18 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       markdown = `[${file.name}](./${filename})`;
     }
 
+    const uploadedVirtualPath = [virtualPath, filename].filter(Boolean).join("/");
+    const uploadedAssetUrl = `/api/assets/${uploadedVirtualPath
+      .split("/")
+      .filter(Boolean)
+      .map(encodeURIComponent)
+      .join("/")}`;
+
     return NextResponse.json({
       ok: true,
       filename,
       markdown,
-      url: `/api/assets/${virtualPath}/${filename}`,
+      url: uploadedAssetUrl,
     });
   } catch (error) {
     if (error instanceof ReadOnlySourceError) {

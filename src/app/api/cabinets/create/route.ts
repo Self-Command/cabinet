@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import path from "path";
 import fs from "fs/promises";
-import {
-  resolveContentPath,
-  sanitizeFilename,
-} from "@/lib/storage/path-utils";
+import { resolveContentPath } from "@/lib/storage/path-utils";
+import { slugifyUserPathSegment } from "@/lib/storage/user-path-slug";
 import { scaffoldCabinet } from "@/lib/storage/cabinet-scaffold";
 import { invalidateTreeCache } from "@/lib/storage/tree-builder";
 import {
@@ -53,7 +51,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
     }
 
-    const slug = sanitizeFilename(name);
+    const slug = slugifyUserPathSegment(name);
     if (!slug) {
       return NextResponse.json(
         { error: "Name must contain alphanumeric characters" },

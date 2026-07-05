@@ -4,10 +4,8 @@ import yaml from "js-yaml";
 import simpleGit from "simple-git";
 import { NextRequest, NextResponse } from "next/server";
 import { CABINET_LINK_META_FILE } from "@/lib/cabinets/files";
-import {
-  resolveContentPath,
-  sanitizeFilename,
-} from "@/lib/storage/path-utils";
+import { resolveContentPath } from "@/lib/storage/path-utils";
+import { slugifyUserPathSegment } from "@/lib/storage/user-path-slug";
 import { ensureDirectory, fileExists, writeFileContent } from "@/lib/storage/fs-operations";
 import { invalidateTreeCache } from "@/lib/storage/tree-builder";
 import { autoCommit } from "@/lib/git/git-service";
@@ -76,7 +74,7 @@ export async function POST(req: NextRequest) {
     }
 
     const derivedName = body.name?.trim() || path.basename(localPath);
-    const folderName = sanitizeFilename(derivedName);
+    const folderName = slugifyUserPathSegment(derivedName);
     if (!folderName) {
       return NextResponse.json(
         { error: "A valid repo name is required." },

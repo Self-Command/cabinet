@@ -32,7 +32,6 @@ import { ProviderGlyph } from "@/components/agents/provider-glyph";
 import type { ProviderInfo } from "@/types/agents";
 import { showError } from "@/lib/ui/toast";
 import { ROOMS, type RoomType } from "@/lib/onboarding/rooms";
-import { slugifyPageName } from "@/lib/markdown/wiki-links";
 import { MockupSidebar, type MockupTab } from "./tour/mockup-sidebar";
 import { CABINET_SHOWCASES, ShowcaseWindow } from "./cabinet-showcases";
 import { Switch } from "@/components/ui/switch";
@@ -110,6 +109,10 @@ interface SuggestedAgent {
   emoji: string;
   role: string;
   checked: boolean;
+}
+
+function slugifyAgentPreviewSlug(name: string): string {
+  return name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "") || "agent";
 }
 
 // The single agent the user configures from scratch in the team step. No
@@ -1816,7 +1819,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
       name
         ? [
             {
-              slug: slugifyPageName(name) || "agent",
+              slug: slugifyAgentPreviewSlug(name),
               name,
               emoji: "\u{1F916}",
               role: firstAgent.role.trim() || "Agent",
@@ -1849,7 +1852,7 @@ export function OnboardingWizard({ onComplete }: { onComplete: () => void }) {
     const name = firstAgent.name.trim();
     if (!name) return teammates.slice(0, 4);
     const lead: SuggestedAgent = {
-      slug: slugifyPageName(name) || "agent",
+      slug: slugifyAgentPreviewSlug(name),
       name,
       emoji: "\u{1F916}",
       role: firstAgent.role.trim() || "Agent",

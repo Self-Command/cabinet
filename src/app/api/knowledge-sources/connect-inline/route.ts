@@ -1,7 +1,8 @@
 import fs from "fs/promises";
 import path from "path";
 import { NextRequest, NextResponse } from "next/server";
-import { resolveContentPath, sanitizeFilename } from "@/lib/storage/path-utils";
+import { resolveContentPath } from "@/lib/storage/path-utils";
+import { slugifyUserPathSegment } from "@/lib/storage/user-path-slug";
 import { ensureDirectory } from "@/lib/storage/fs-operations";
 import { invalidateTreeCache } from "@/lib/storage/tree-builder";
 import { autoCommit } from "@/lib/git/git-service";
@@ -83,7 +84,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Path is not a directory" }, { status: 400 });
     }
 
-    const folderName = sanitizeFilename(body.name?.trim() || path.basename(absPathInput));
+    const folderName = slugifyUserPathSegment(
+      body.name?.trim() || path.basename(absPathInput)
+    );
     if (!folderName) {
       return NextResponse.json({ error: "A valid folder name is required" }, { status: 400 });
     }

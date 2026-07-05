@@ -2,10 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import path from "path";
 import fs from "fs/promises";
 import yaml from "js-yaml";
-import {
-  resolveContentPath,
-  sanitizeFilename,
-} from "@/lib/storage/path-utils";
+import { resolveContentPath } from "@/lib/storage/path-utils";
+import { slugifyUserPathSegment } from "@/lib/storage/user-path-slug";
 import { seedGettingStartedDir } from "@/lib/storage/cabinet-scaffold";
 import { downloadRegistryTemplate } from "@/lib/registry/github-fetch";
 import { getRegistryTemplates } from "@/lib/registry/registry-manifest";
@@ -41,7 +39,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Determine target directory
-    const dirName = body.name ? sanitizeFilename(body.name) : slug;
+    const dirName = body.name ? slugifyUserPathSegment(body.name) || slug : slug;
     const virtualPath = targetPath ? `${targetPath}/${dirName}` : dirName;
     const targetDir = resolveContentPath(virtualPath);
 

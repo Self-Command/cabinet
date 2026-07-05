@@ -106,6 +106,7 @@ import { useFileImport } from "./use-file-import";
 import { getDataDir } from "@/lib/data-dir-cache";
 import { isMacPlatform, isEditableTarget, formatShortcut } from "@/lib/keys";
 import { useLocale } from "@/i18n/use-locale";
+import { slugifyPageName } from "@/lib/markdown/wiki-links";
 
 interface TreeNodeProps {
   node: TreeNodeType;
@@ -459,11 +460,7 @@ function TreeNodeImpl({
     setCreating(true);
     try {
       await createPage(node.path, subPageTitle.trim());
-      const slug = subPageTitle
-        .trim()
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-|-$/g, "");
+      const slug = slugifyPageName(subPageTitle);
       const nextPath = `${node.path}/${slug}`;
       selectPage(nextPath);
       loadPage(nextPath);
@@ -502,11 +499,7 @@ function TreeNodeImpl({
     setCreatingFolder(true);
     try {
       await createPage(node.path, newFolderName.trim());
-      const slug = newFolderName
-        .trim()
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-|-$/g, "");
+      const slug = slugifyPageName(newFolderName);
       const nextPath = `${node.path}/${slug}`;
       expandPath(node.path);
       expandPath(nextPath);

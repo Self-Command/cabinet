@@ -1,6 +1,7 @@
 import fs from "fs/promises";
 import path from "path";
-import { resolveContentPath, sanitizeFilename } from "@/lib/storage/path-utils";
+import { resolveContentPath } from "@/lib/storage/path-utils";
+import { slugifyUserPathSegment } from "@/lib/storage/user-path-slug";
 import { ensureDirectory, fileExists } from "@/lib/storage/fs-operations";
 import { invalidateTreeCache } from "@/lib/storage/tree-builder";
 import { autoCommit } from "@/lib/git/git-service";
@@ -74,7 +75,7 @@ export async function importDirectory(
 
   const cleanParent = parentPath.trim().replace(/^\/+|\/+$/g, "");
   const baseName =
-    sanitizeFilename(nameOverride ?? path.basename(resolvedSource)) || "folder";
+    slugifyUserPathSegment(nameOverride ?? path.basename(resolvedSource)) || "folder";
 
   let folderName = baseName;
   let counter = 1;

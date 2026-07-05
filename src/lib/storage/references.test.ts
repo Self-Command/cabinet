@@ -24,6 +24,17 @@ test("resolvePageBySlug still matches native slug-named pages", () => {
   assert.equal(resolvePageBySlug("day-5", null, pages), "notes/day-5");
 });
 
+test("resolvePageBySlug matches unicode slug-named pages", () => {
+  const pages = [
+    { path: "blank-room/生活领域", name: "生活领域" },
+    { path: "blank-room/生活领域/个人财务", name: "个人财务" },
+  ];
+  assert.equal(
+    resolvePageBySlug("个人财务", "blank-room/生活领域", pages),
+    "blank-room/生活领域/个人财务"
+  );
+});
+
 test("resolvePageBySlug prefers a sibling on ambiguous slugs", () => {
   const pages = [
     { path: "a/Day 1", name: "Day 1" },

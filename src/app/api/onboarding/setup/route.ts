@@ -3,7 +3,8 @@ import path from "path";
 import fs from "fs/promises";
 import yaml from "js-yaml";
 import matter from "gray-matter";
-import { DATA_DIR, sanitizeFilename } from "@/lib/storage/path-utils";
+import { DATA_DIR } from "@/lib/storage/path-utils";
+import { slugifyUserPathSegment } from "@/lib/storage/user-path-slug";
 import { scaffoldCabinet } from "@/lib/storage/cabinet-scaffold";
 import { updateRoomMeta } from "@/lib/cabinets/rooms";
 import {
@@ -86,8 +87,8 @@ export async function POST(req: NextRequest) {
 
     // The first room is a real, isolated top-level cabinet: data/<roomSlug>/.
     const roomSlug =
-      sanitizeFilename(workspaceName) ||
-      sanitizeFilename(roomConfig.label) ||
+      slugifyUserPathSegment(workspaceName) ||
+      slugifyUserPathSegment(roomConfig.label) ||
       "home";
     const roomDir = path.join(DATA_DIR, roomSlug);
     const ROOM_AGENTS_DIR = path.join(roomDir, ".agents");

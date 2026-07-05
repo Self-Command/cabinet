@@ -1,3 +1,5 @@
+import { slugifyUserPathSegment } from "@/lib/storage/user-path-slug";
+
 /**
  * Canonical wiki-link helpers. Wiki-links are written `[[Page Name]]` in
  * markdown and resolve to a page by *slug* (see `findPageBySlug` in
@@ -12,10 +14,7 @@
 
 /** Lowercase, collapse non-alphanumerics to single dashes, trim edge dashes. */
 export function slugifyPageName(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
+  return slugifyUserPathSegment(name);
 }
 
 export interface WikiLinkOccurrence {

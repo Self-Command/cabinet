@@ -1,7 +1,11 @@
 import fs from "fs/promises";
 import path from "path";
 import matter from "gray-matter";
-import { resolveContentPath, sanitizeFilename } from "@/lib/storage/path-utils";
+import { resolveContentPath } from "@/lib/storage/path-utils";
+import {
+  sanitizeUserFileBaseName,
+  slugifyUserPathSegment,
+} from "@/lib/storage/user-path-slug";
 import { fileExists } from "@/lib/storage/fs-operations";
 import { writePage } from "@/lib/storage/page-io";
 import { htmlToMarkdown } from "@/lib/markdown/to-markdown";
@@ -97,7 +101,7 @@ async function buildExistingIndex(): Promise<Map<string, ExistingPage>> {
 
 function slugSegments(note: AppleNote): string[] {
   return note.folders
-    .map((f) => sanitizeFilename(f) || "folder")
+    .map((f) => slugifyUserPathSegment(f) || "folder")
     .filter(Boolean);
 }
 
@@ -143,7 +147,7 @@ function planAttachments(refs: AttachmentRef[]): AttachmentPlan {
   const files: AttachmentPlan["files"] = [];
   const lines: string[] = [];
   for (const ref of refs) {
-    let name = sanitizeFilename(ref.filename) || "attachment";
+    let name = sanitizeUserFileBaseName(ref.filename) || "attachment";
     const ext = path.extname(name);
     const stem = ext ? name.slice(0, -ext.length) : name;
     let i = 1;
@@ -234,7 +238,7 @@ export async function importAppleNotes(
     if (prior) {
       virtualPath = prior.virtualPath;
     } else {
-      const slug = sanitizeFilename(note.name) || "untitled";
+      const slug = slugifyUserPathSegment(note.name) || "untitled";
       const base = [importRoot, ...slugSegments(note), slug].join("/");
       virtualPath = await freshPath(base, note.id);
     }

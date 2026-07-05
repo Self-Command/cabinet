@@ -27,6 +27,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useLocale } from "@/i18n/use-locale";
+import { slugifyPageName } from "@/lib/markdown/wiki-links";
 
 /**
  * Shared "+ ▾" create button used in nav bars outside the Tasks board (KB
@@ -114,10 +115,7 @@ export function NewTaskButton() {
     setCreatingPage(true);
     try {
       await createPage(pageParentPath, title);
-      const slug = title
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-|-$/g, "");
+      const slug = slugifyPageName(title);
       const nextPath = pageParentPath ? `${pageParentPath}/${slug}` : slug;
       selectPage(nextPath);
       await loadPage(nextPath);
