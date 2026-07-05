@@ -38,9 +38,11 @@ echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 ```bash
 cd deploy
 cp .env.example .env
-mkdir -p secrets data backups
+mkdir -p secrets data claude backups
 cp secrets/.cabinet.env.example secrets/.cabinet.env
 chmod 600 secrets/.cabinet.env
+sudo chown -R 1001:1001 data claude
+sudo chmod -R u+rwX data claude
 ```
 
 编辑 `deploy/.env`：
@@ -101,6 +103,12 @@ docker compose -f docker-compose.release.yml logs -f cabinet
 echo '你的 GitHub PAT' | docker login ghcr.io -u 你的GitHub用户名 --password-stdin
 ```
 
+如果你用 release 镜像方式部署，后续所有 `docker compose` 命令都带上：
+
+```bash
+-f docker-compose.release.yml
+```
+
 此时 Cabinet 只在本机可访问：
 
 ```bash
@@ -110,17 +118,28 @@ curl http://127.0.0.1:4100/health
 
 ## 4. 配置宿主机 Nginx
 
-复制示例：
+如果你的 Nginx 使用 `/etc/nginx/conf.d`，推荐这样配置。先禁用默认站点，避免 Certbot 把 HTTPS 配到默认欢迎页：
 
 ```bash
-sudo cp nginx-cabinet.conf /etc/nginx/sites-available/cabinet.conf
-sudo sed -i 's/cabinet.example.com/你的域名/g' /etc/nginx/sites-available/cabinet.conf
-sudo ln -s /etc/nginx/sites-available/cabinet.conf /etc/nginx/sites-enabled/cabinet.conf
+sudo rm -f /etc/nginx/sites-enabled/default
+sudo rm -f /etc/nginx/conf.d/default.conf
+sudo cp nginx-cabinet.conf /etc/nginx/conf.d/cabinet.conf
+sudo sed -i 's/cabinet.example.com/你的域名/g' /etc/nginx/conf.d/cabinet.conf
 sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-如果你已有 HTTPS/Certbot，只需要把 `location /` 和 `location /daemon/` 两段合并到你的 HTTPS server block 里。
+然后再申请 HTTPS：
+
+```bash
+sudo apt update
+sudo apt install -y certbot python3-certbot-nginx
+sudo certbot --nginx -d 你的域名
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+如果你已经有 HTTPS，只需要把 `location /` 和 `location /daemon/` 两段合并到你的 HTTPS server block 里。确认 `server_name` 是你的域名，不是默认站点。
 
 访问：
 
@@ -177,7 +196,7 @@ Cabinet 当前更像单用户/小团队私有工作台，不是带角色权限�
 进入容器：
 
 ```bash
-docker compose exec cabinet bash
+docker compose -f docker-compose.release.yml exec cabinet bash
 ```
 
 检查 Claude Code：
@@ -198,7 +217,7 @@ claude setup-token
 或者直接在容器里登录，登录状态会保存在 `deploy/claude`：
 
 ```bash
-docker compose exec cabinet claude auth login
+docker compose -f docker-compose.release.yml exec cabinet claude auth login
 ```
 
 ## 6. 性能建议
@@ -210,6 +229,17 @@ docker compose exec cabinet claude auth login
 - 数据存在宿主机目录 `deploy/data`，不要放 NFS/对象存储。
 
 ## 7. 更新
+
+release 镜像方式：
+
+```bash
+git pull
+cd deploy
+docker compose -f docker-compose.release.yml pull
+docker compose -f docker-compose.release.yml up -d
+```
+
+服务器直接构建方式：
 
 ```bash
 git pull
@@ -240,6 +270,40 @@ docker run --rm \
 
 ## 9. 常见问题
 
+### 打开域名看到 Nginx 欢迎页
+
+说明请求命中了 Nginx 默认站点，不是 Cabinet 代理。通常是还没复制 `nginx-cabinet.conf`，或者先运行了 Certbot，导致证书配置被写进 `/etc/nginx/sites-enabled/default`。
+
+修复：
+
+```bash
+sudo rm -f /etc/nginx/sites-enabled/default
+sudo rm -f /etc/nginx/conf.d/default.conf
+sudo cp nginx-cabinet.conf /etc/nginx/conf.d/cabinet.conf
+sudo sed -i 's/cabinet.example.com/你的域名/g' /etc/nginx/conf.d/cabinet.conf
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+如果已经有证书，再运行：
+
+```bash
+sudo certbot --nginx -d 你的域名
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+### 容器提示 `/home/cabinet` 权限不足
+
+说明宿主机 bind mount 目录不是容器用户可写。修复：
+
+```bash
+cd deploy
+sudo chown -R 1001:1001 data claude
+sudo chmod -R u+rwX data claude
+docker compose -f docker-compose.release.yml up -d --force-recreate
+```
+
 ### 页面能打开，但 Agent / Web Terminal 连不上
 
 检查 `deploy/.env` 里的域名必须和浏览器访问的域名一致：
@@ -251,7 +315,7 @@ CABINET_DOMAIN=cabinet.example.com
 然后重启：
 
 ```bash
-docker compose up -d --force-recreate
+docker compose -f docker-compose.release.yml up -d --force-recreate
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
