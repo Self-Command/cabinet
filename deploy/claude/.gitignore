@@ -1,0 +1,6 @@
+home/
+project/
+claude.env
+!.gitignore
+!README.md
+!claude.env.example

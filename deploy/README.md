@@ -41,6 +41,7 @@ cp .env.example .env
 mkdir -p secrets
 cp secrets/.cabinet.env.example secrets/.cabinet.env
 chmod 600 secrets/.cabinet.env
+cp claude/claude.env.example claude/claude.env
 ```
 
 编辑 `deploy/.env`：
@@ -61,6 +62,8 @@ KB_PASSWORD=一个很长的登录密码
 CABINET_AUTH_SALT=用 openssl rand -hex 32 生成
 ANTHROPIC_API_KEY=sk-ant-...
 ```
+
+`deploy/secrets/.cabinet.env` 只放 Cabinet 登录和密钥。Claude Code 的非密钥配置放到 `deploy/claude/`，不要混进项目根目录 `.env`。
 
 生成 salt：
 
@@ -104,6 +107,62 @@ https://你的域名
 
 首次进入用 `KB_PASSWORD` 登录。
 
+## Claude Code 外置配置
+
+这套 Compose 已经把 Claude Code 相关目录映射出来：
+
+```text
+deploy/claude/home     -> /home/cabinet
+deploy/claude/project  -> /data/.claude
+deploy/claude/claude.env -> 可选 Claude Code 环境变量
+```
+
+首次启动后会自动生成这些文件：
+
+```text
+deploy/claude/home/.claude/settings.json
+deploy/claude/home/.claude/CLAUDE.md
+deploy/claude/home/.claude/agents/
+deploy/claude/home/.claude.json
+deploy/claude/project/settings.json
+deploy/claude/project/settings.local.json
+deploy/claude/project/CLAUDE.md
+deploy/claude/project/.mcp.json
+```
+
+对应 Claude Code 官方配置层级：
+
+- 用户设置：`deploy/claude/home/.claude/settings.json`
+- 用户指令：`deploy/claude/home/.claude/CLAUDE.md`
+- 用户 MCP / 状态：`deploy/claude/home/.claude.json`
+- 项目设置：`deploy/claude/project/settings.json`
+- 项目本地设置：`deploy/claude/project/settings.local.json`
+- 项目指令：`deploy/claude/project/CLAUDE.md`
+- 项目 MCP：`deploy/claude/project/.mcp.json`，容器内会软链为 `/data/.mcp.json`
+
+如果你要配置代理、自定义 Anthropic endpoint、默认模型等 Claude Code 环境变量，编辑：
+
+```bash
+nano deploy/claude/claude.env
+docker compose up -d --force-recreate
+```
+
+示例：
+
+```env
+ANTHROPIC_BASE_URL=https://api.anthropic.com
+ANTHROPIC_MODEL=sonnet
+HTTP_PROXY=http://127.0.0.1:7890
+HTTPS_PROXY=http://127.0.0.1:7890
+```
+
+密钥仍建议放 `deploy/secrets/.cabinet.env`：
+
+```env
+ANTHROPIC_API_KEY=sk-ant-...
+CLAUDE_CODE_OAUTH_TOKEN=...
+```
+
 ## 权限说明
 
 Cabinet 当前更像单用户/小团队私有工作台，不是带角色权限的多用户系统：
@@ -138,7 +197,7 @@ claude setup-token
 # 然后设置 CLAUDE_CODE_OAUTH_TOKEN=...
 ```
 
-或者直接在容器里登录，登录状态会保存在 `cabinet_home` volume：
+或者直接在容器里登录，登录状态会保存在 `deploy/claude/home`：
 
 ```bash
 docker compose exec cabinet claude auth login
@@ -176,7 +235,7 @@ docker run --rm \
 
 ```bash
 docker run --rm \
-  -v deploy_cabinet_home:/home:ro \
+  -v "$PWD/claude/home:/home:ro" \
   -v "$PWD/backups:/backup" \
   alpine tar czf /backup/cabinet-home-$(date +%F).tgz -C /home .
 ```
@@ -216,4 +275,4 @@ claude -p 'Reply with exactly OK' --output-format text
 
 ### 想省更多内存
 
-关闭不需要的定时任务和 heartbeat，避免多个 Agent 同时跑。Claude Code 的主要开销来自 agent 子进程和工具调用，不是 Caddy 或 Docker 本身。
+关闭不需要的定时任务和 heartbeat，避免多个 Agent 同时跑。Claude Code 的主要开销来自 agent 子进程和工具调用，不是 Nginx 或 Docker 本身。

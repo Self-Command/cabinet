@@ -21,10 +21,15 @@ services:
       NEXT_TELEMETRY_DISABLED: "1"
       DISABLE_AUTOUPDATER: "1"
       CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1"
+      CLAUDE_CONFIG_DIR: /home/cabinet/.claude
       NODE_OPTIONS: --max-old-space-size=${NODE_MAX_OLD_SPACE_SIZE:-768}
+    env_file:
+      - path: ./claude/claude.env
+        required: false
     volumes:
       - cabinet_data:/data
-      - cabinet_home:/home/cabinet
+      - ./claude/home:/home/cabinet
+      - ./claude/project:/data/.claude
       - ./secrets/.cabinet.env:/app/.cabinet.env
     ports:
       - "127.0.0.1:${CABINET_APP_PORT:-4000}:4000"
@@ -38,4 +43,3 @@ services:
 
 volumes:
   cabinet_data:
-  cabinet_home:

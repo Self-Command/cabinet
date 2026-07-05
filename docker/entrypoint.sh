@@ -4,8 +4,41 @@ set -euo pipefail
 : "${CABINET_DATA_DIR:=/data}"
 : "${CABINET_ENV_FILE:=/app/.cabinet.env}"
 : "${HOME:=/home/cabinet}"
+: "${CLAUDE_CONFIG_DIR:=$HOME/.claude}"
 
-mkdir -p "$CABINET_DATA_DIR" "$HOME" "$HOME/.claude" "$HOME/.config" /app/.next/cache
+mkdir -p \
+  "$CABINET_DATA_DIR" \
+  "$CABINET_DATA_DIR/.claude" \
+  "$HOME" \
+  "$CLAUDE_CONFIG_DIR" \
+  "$HOME/.config" \
+  /app/.next/cache
+
+ensure_json_file() {
+  local file="$1"
+  if [ ! -f "$file" ]; then
+    printf '{}\n' > "$file"
+  fi
+}
+
+ensure_text_file() {
+  local file="$1"
+  if [ ! -f "$file" ]; then
+    : > "$file"
+  fi
+}
+
+ensure_json_file "$CLAUDE_CONFIG_DIR/settings.json"
+ensure_text_file "$CLAUDE_CONFIG_DIR/CLAUDE.md"
+ensure_json_file "$HOME/.claude.json"
+ensure_json_file "$CABINET_DATA_DIR/.claude/settings.json"
+ensure_json_file "$CABINET_DATA_DIR/.claude/settings.local.json"
+ensure_text_file "$CABINET_DATA_DIR/.claude/CLAUDE.md"
+ensure_json_file "$CABINET_DATA_DIR/.claude/.mcp.json"
+
+if [ ! -e "$CABINET_DATA_DIR/.mcp.json" ]; then
+  ln -s ".claude/.mcp.json" "$CABINET_DATA_DIR/.mcp.json"
+fi
 
 if [ ! -f "$CABINET_ENV_FILE" ]; then
   install -m 0600 -o cabinet -g cabinet /dev/null "$CABINET_ENV_FILE"

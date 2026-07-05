@@ -5,5 +5,8 @@ data
 .cabinet.env
 .env*
 deploy/secrets
+deploy/claude/home
+deploy/claude/project
+deploy/claude/claude.env
 backups
 .audit-shots
