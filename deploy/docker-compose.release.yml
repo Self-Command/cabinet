@@ -1,0 +1,36 @@
+services:
+  cabinet:
+    image: ${CABINET_IMAGE:-ghcr.io/self-command/cabinet:latest}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      HOSTNAME: 0.0.0.0
+      PORT: "4000"
+      CABINET_APP_PORT: "4000"
+      CABINET_DAEMON_PORT: "4100"
+      CABINET_DATA_DIR: /data
+      CABINET_APP_ORIGIN: https://${CABINET_DOMAIN}
+      CABINET_PUBLIC_DAEMON_ORIGIN: https://${CABINET_DOMAIN}/daemon
+      CABINET_DAEMON_URL: http://127.0.0.1:4100
+      CABINET_TELEMETRY_DISABLED: "1"
+      NEXT_TELEMETRY_DISABLED: "1"
+      DISABLE_AUTOUPDATER: "1"
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1"
+      CLAUDE_CONFIG_DIR: /home/cabinet/.claude
+      NODE_OPTIONS: --max-old-space-size=${NODE_MAX_OLD_SPACE_SIZE:-768}
+    env_file:
+      - path: ./claude/claude.env
+        required: false
+    volumes:
+      - ./data:/data
+      - ./claude/home:/home/cabinet
+      - ./secrets/.cabinet.env:/app/.cabinet.env
+    ports:
+      - "127.0.0.1:${CABINET_APP_PORT:-4000}:4000"
+      - "127.0.0.1:${CABINET_DAEMON_PORT:-4100}:4100"
+    mem_limit: ${CABINET_MEM_LIMIT:-3500m}
+    cpus: ${CABINET_CPUS:-5.5}
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536

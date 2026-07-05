@@ -73,9 +73,33 @@ openssl rand -hex 32
 
 ## 3. 启动
 
+### 服务器直接构建
+
 ```bash
 docker compose up -d --build
 docker compose logs -f cabinet
+```
+
+### 使用 GitHub Actions 构建好的镜像
+
+本仓库包含 `.github/workflows/docker-image.yml`。推送到 `codex/docker-claude-code-deploy` 分支，或在 GitHub Actions 页面手动运行 `Build Docker image` 后，会构建并推送：
+
+```text
+ghcr.io/self-command/cabinet:latest
+```
+
+服务器使用这个方式就不需要 `npm ci` / `next build`：
+
+```bash
+docker compose -f docker-compose.release.yml pull
+docker compose -f docker-compose.release.yml up -d
+docker compose -f docker-compose.release.yml logs -f cabinet
+```
+
+如果 GHCR 包是 private，服务器先登录一次：
+
+```bash
+echo '你的 GitHub PAT' | docker login ghcr.io -u 你的GitHub用户名 --password-stdin
 ```
 
 此时 Cabinet 只在本机可访问：
