@@ -1,0 +1,11 @@
+{$CABINET_DOMAIN} {
+  encode zstd gzip
+
+  handle_path /daemon/* {
+    reverse_proxy cabinet:4100
+  }
+
+  handle {
+    reverse_proxy cabinet:4000
+  }
+}

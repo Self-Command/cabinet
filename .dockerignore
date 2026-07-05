@@ -2,8 +2,8 @@ node_modules
 .next
 .git
 data
-*.md
-!README.md
-!CLAUDE.md
-.env
-.env.local
+.cabinet.env
+.env*
+deploy/secrets
+backups
+.audit-shots
