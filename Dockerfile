@@ -14,6 +14,7 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 COPY package.json package-lock.json ./
+COPY scripts/postinstall.mjs ./scripts/postinstall.mjs
 RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund
 
 FROM deps AS builder
