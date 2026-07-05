@@ -23,12 +23,9 @@ services:
       CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1"
       CLAUDE_CONFIG_DIR: /home/cabinet/.claude
       NODE_OPTIONS: --max-old-space-size=${NODE_MAX_OLD_SPACE_SIZE:-768}
-    env_file:
-      - path: ./claude/claude.env
-        required: false
     volumes:
       - ./data:/data
-      - ./claude/home:/home/cabinet
+      - ./claude:/home/cabinet
       - ./secrets/.cabinet.env:/app/.cabinet.env
     ports:
       - "127.0.0.1:${CABINET_APP_PORT:-4000}:4000"

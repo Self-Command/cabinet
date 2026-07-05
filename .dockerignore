@@ -6,7 +6,6 @@ data
 .env*
 deploy/secrets
 deploy/data
-deploy/claude/home
-deploy/claude/claude.env
+deploy/claude
 backups
 .audit-shots

@@ -38,10 +38,9 @@ echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 ```bash
 cd deploy
 cp .env.example .env
-mkdir -p secrets data claude/home
+mkdir -p secrets data backups
 cp secrets/.cabinet.env.example secrets/.cabinet.env
 chmod 600 secrets/.cabinet.env
-cp claude/claude.env.example claude/claude.env
 ```
 
 编辑 `deploy/.env`：
@@ -63,7 +62,7 @@ CABINET_AUTH_SALT=用 openssl rand -hex 32 生成
 ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-`deploy/secrets/.cabinet.env` 只放 Cabinet 登录和密钥。Claude Code 的非密钥配置放到 `deploy/claude/`，不要混进项目根目录 `.env`。
+`deploy/secrets/.cabinet.env` 只放 Cabinet 登录和密钥。Claude Code 已经装在镜像里，配置目录会在容器首次启动后自动出现在 `deploy/claude/`。
 
 生成 salt：
 
@@ -136,54 +135,26 @@ https://你的域名
 这套 Compose 已经把 Claude Code 相关目录映射出来：
 
 ```text
-deploy/claude/home       -> /home/cabinet
-deploy/data              -> /data
-deploy/claude/claude.env -> 可选 Claude Code 环境变量
+deploy/claude -> /home/cabinet
 ```
 
-这不是单个文件映射：`/home/cabinet` 和 `/data` 都是整目录映射。Claude Code 在容器里写到这些目录的任何配置、登录态、MCP、项目指令都会落到宿主机。
+这是 Claude Code 在容器里的用户 HOME。Claude Code 的用户级配置、登录态、缓存、全局状态都会落到这个目录。用户不需要提前创建 Claude Code 配置文件；容器首次启动时会自动初始化。
 
 首次启动后会自动生成这些文件：
 
 ```text
-deploy/claude/home/.claude/settings.json
-deploy/claude/home/.claude/CLAUDE.md
-deploy/claude/home/.claude/agents/
-deploy/claude/home/.claude.json
-deploy/data/.claude/settings.json
-deploy/data/.claude/settings.local.json
-deploy/data/.claude/CLAUDE.md
-deploy/data/.mcp.json
-deploy/data/CLAUDE.md
+deploy/claude/.claude/settings.json
+deploy/claude/.claude/CLAUDE.md
+deploy/claude/.claude.json
 ```
 
-对应 Claude Code 官方配置层级：
+对应 Claude Code 用户级配置层级：
 
-- 用户设置：`deploy/claude/home/.claude/settings.json`
-- 用户指令：`deploy/claude/home/.claude/CLAUDE.md`
-- 用户 MCP / 状态：`deploy/claude/home/.claude.json`
-- 项目设置：`deploy/data/.claude/settings.json`
-- 项目本地设置：`deploy/data/.claude/settings.local.json`
-- 项目指令：`deploy/data/.claude/CLAUDE.md` 或 `deploy/data/CLAUDE.md`
-- 项目 MCP：`deploy/data/.mcp.json`
+- 用户设置：`deploy/claude/.claude/settings.json`
+- 用户指令：`deploy/claude/.claude/CLAUDE.md`
+- 用户 MCP / 状态：`deploy/claude/.claude.json`
 
-如果你要配置代理、自定义 Anthropic endpoint、默认模型等 Claude Code 环境变量，编辑：
-
-```bash
-nano deploy/claude/claude.env
-docker compose up -d --force-recreate
-```
-
-示例：
-
-```env
-ANTHROPIC_BASE_URL=https://api.anthropic.com
-ANTHROPIC_MODEL=sonnet
-HTTP_PROXY=http://127.0.0.1:7890
-HTTPS_PROXY=http://127.0.0.1:7890
-```
-
-密钥仍建议放 `deploy/secrets/.cabinet.env`：
+密钥放 `deploy/secrets/.cabinet.env`：
 
 ```env
 ANTHROPIC_API_KEY=sk-ant-...
@@ -224,7 +195,7 @@ claude setup-token
 # 然后设置 CLAUDE_CODE_OAUTH_TOKEN=...
 ```
 
-或者直接在容器里登录，登录状态会保存在 `deploy/claude/home`：
+或者直接在容器里登录，登录状态会保存在 `deploy/claude`：
 
 ```bash
 docker compose exec cabinet claude auth login
@@ -262,7 +233,7 @@ docker run --rm \
 
 ```bash
 docker run --rm \
-  -v "$PWD/claude/home:/home:ro" \
+  -v "$PWD/claude:/home:ro" \
   -v "$PWD/backups:/backup" \
   alpine tar czf /backup/cabinet-home-$(date +%F).tgz -C /home .
 ```

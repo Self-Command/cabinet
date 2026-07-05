@@ -53,6 +53,8 @@ next-env.d.ts
 
 # claude code
 .claude/
+/deploy/claude/
+/deploy/data/
 
 # cabinetai CLI
 cabinetai/dist/
