@@ -34,11 +34,8 @@ ensure_json_file "$HOME/.claude.json"
 ensure_json_file "$CABINET_DATA_DIR/.claude/settings.json"
 ensure_json_file "$CABINET_DATA_DIR/.claude/settings.local.json"
 ensure_text_file "$CABINET_DATA_DIR/.claude/CLAUDE.md"
-ensure_json_file "$CABINET_DATA_DIR/.claude/.mcp.json"
-
-if [ ! -e "$CABINET_DATA_DIR/.mcp.json" ]; then
-  ln -s ".claude/.mcp.json" "$CABINET_DATA_DIR/.mcp.json"
-fi
+ensure_json_file "$CABINET_DATA_DIR/.mcp.json"
+ensure_text_file "$CABINET_DATA_DIR/CLAUDE.md"
 
 if [ ! -f "$CABINET_ENV_FILE" ]; then
   install -m 0600 -o cabinet -g cabinet /dev/null "$CABINET_ENV_FILE"

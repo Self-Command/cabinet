@@ -1,5 +1,4 @@
 home/
-project/
 claude.env
 !.gitignore
 !README.md

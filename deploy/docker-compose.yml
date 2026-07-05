@@ -27,9 +27,8 @@ services:
       - path: ./claude/claude.env
         required: false
     volumes:
-      - cabinet_data:/data
+      - ./data:/data
       - ./claude/home:/home/cabinet
-      - ./claude/project:/data/.claude
       - ./secrets/.cabinet.env:/app/.cabinet.env
     ports:
       - "127.0.0.1:${CABINET_APP_PORT:-4000}:4000"
@@ -40,6 +39,3 @@ services:
       nofile:
         soft: 65536
         hard: 65536
-
-volumes:
-  cabinet_data:

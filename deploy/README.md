@@ -38,7 +38,7 @@ echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 ```bash
 cd deploy
 cp .env.example .env
-mkdir -p secrets
+mkdir -p secrets data claude/home
 cp secrets/.cabinet.env.example secrets/.cabinet.env
 chmod 600 secrets/.cabinet.env
 cp claude/claude.env.example claude/claude.env
@@ -112,10 +112,12 @@ https://你的域名
 这套 Compose 已经把 Claude Code 相关目录映射出来：
 
 ```text
-deploy/claude/home     -> /home/cabinet
-deploy/claude/project  -> /data/.claude
+deploy/claude/home       -> /home/cabinet
+deploy/data              -> /data
 deploy/claude/claude.env -> 可选 Claude Code 环境变量
 ```
+
+这不是单个文件映射：`/home/cabinet` 和 `/data` 都是整目录映射。Claude Code 在容器里写到这些目录的任何配置、登录态、MCP、项目指令都会落到宿主机。
 
 首次启动后会自动生成这些文件：
 
@@ -124,10 +126,11 @@ deploy/claude/home/.claude/settings.json
 deploy/claude/home/.claude/CLAUDE.md
 deploy/claude/home/.claude/agents/
 deploy/claude/home/.claude.json
-deploy/claude/project/settings.json
-deploy/claude/project/settings.local.json
-deploy/claude/project/CLAUDE.md
-deploy/claude/project/.mcp.json
+deploy/data/.claude/settings.json
+deploy/data/.claude/settings.local.json
+deploy/data/.claude/CLAUDE.md
+deploy/data/.mcp.json
+deploy/data/CLAUDE.md
 ```
 
 对应 Claude Code 官方配置层级：
@@ -135,10 +138,10 @@ deploy/claude/project/.mcp.json
 - 用户设置：`deploy/claude/home/.claude/settings.json`
 - 用户指令：`deploy/claude/home/.claude/CLAUDE.md`
 - 用户 MCP / 状态：`deploy/claude/home/.claude.json`
-- 项目设置：`deploy/claude/project/settings.json`
-- 项目本地设置：`deploy/claude/project/settings.local.json`
-- 项目指令：`deploy/claude/project/CLAUDE.md`
-- 项目 MCP：`deploy/claude/project/.mcp.json`，容器内会软链为 `/data/.mcp.json`
+- 项目设置：`deploy/data/.claude/settings.json`
+- 项目本地设置：`deploy/data/.claude/settings.local.json`
+- 项目指令：`deploy/data/.claude/CLAUDE.md` 或 `deploy/data/CLAUDE.md`
+- 项目 MCP：`deploy/data/.mcp.json`
 
 如果你要配置代理、自定义 Anthropic endpoint、默认模型等 Claude Code 环境变量，编辑：
 
@@ -209,7 +212,7 @@ docker compose exec cabinet claude auth login
 - 不要把大型代码仓库整个放进 Cabinet data 目录，避免文件监听过多。
 - 默认 `NODE_OPTIONS=--max-old-space-size=768`，4G 机器更稳。
 - `CABINET_MEM_LIMIT=3500m` 给宿主机 Nginx 和系统留一点余量。
-- 数据存在 Docker volume `cabinet_data`，不要放 NFS/对象存储。
+- 数据存在宿主机目录 `deploy/data`，不要放 NFS/对象存储。
 
 ## 7. 更新
 
@@ -226,7 +229,7 @@ docker compose up -d
 
 ```bash
 docker run --rm \
-  -v deploy_cabinet_data:/data:ro \
+  -v "$PWD/data:/data:ro" \
   -v "$PWD/backups:/backup" \
   alpine tar czf /backup/cabinet-data-$(date +%F).tgz -C /data .
 ```
