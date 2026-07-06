@@ -5,7 +5,16 @@ import remarkRehype from "remark-rehype";
 import rehypeStringify from "rehype-stringify";
 import { detectEmbed } from "@/lib/embeds/detect";
 import { slugifyPageName } from "@/lib/markdown/wiki-links";
+import { isPathLikeWikiTarget } from "@/lib/markdown/internal-link-target";
 import { addHeadingIds } from "@/lib/markdown/heading-slug";
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
 
 /**
  * Pre-process markdown to convert ![[file.tex]] embeds into
@@ -35,8 +44,11 @@ function convertLatexEmbeds(markdown: string): string {
  */
 function convertWikiLinks(markdown: string): string {
   return markdown.replace(/\[\[([^\]]+)\]\]/g, (_match, pageName: string) => {
-    const slug = slugifyPageName(pageName);
-    return `<a data-wiki-link="true" data-page-name="${pageName}" href="#page:${slug}" class="wiki-link">${pageName}</a>`;
+    const href = isPathLikeWikiTarget(pageName)
+      ? `#page-path:${encodeURIComponent(pageName)}`
+      : `#page:${slugifyPageName(pageName)}`;
+    const safePageName = escapeHtml(pageName);
+    return `<a data-wiki-link="true" data-page-name="${safePageName}" href="${escapeHtml(href)}" class="wiki-link">${safePageName}</a>`;
   });
 }
 

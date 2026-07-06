@@ -21,6 +21,10 @@ import { findNodeByPath } from "@/lib/cabinets/tree";
 import { markdownToHtml } from "@/lib/markdown/to-html";
 import { htmlToMarkdown } from "@/lib/markdown/to-markdown";
 import { slugifyPageName } from "@/lib/markdown/wiki-links";
+import {
+  markdownPageTargetCandidates,
+  markdownPageTargetSlug,
+} from "@/lib/markdown/internal-link-target";
 import { detectEmbed } from "@/lib/embeds/detect";
 import { openLocalFileUrl } from "@/lib/runtime/open-local-file";
 import { openUrlInAppropriateContext } from "@/lib/runtime/open-url";
@@ -105,29 +109,12 @@ function resolveInternalLink(
 ): string | null {
   const allPages = flattenTree(nodes);
 
-  // Clean up the href: strip .md extension, leading ./ or /
-  const linkPath = href
-    .replace(/\.md$/, "")
-    .replace(/^\.\//, "")
-    .replace(/^\//, "");
-
-  // 1. Try as absolute path (exact match in tree)
-  const exactMatch = allPages.find((p) => p.path === linkPath);
-  if (exactMatch) return exactMatch.path;
-
-  // 2. Try relative to current page's directory
-  if (currentPath) {
-    const parentDir = currentPath.includes("/")
-      ? currentPath.substring(0, currentPath.lastIndexOf("/"))
-      : "";
-    const relativePath = parentDir ? parentDir + "/" + linkPath : linkPath;
-    const relMatch = allPages.find((p) => p.path === relativePath);
-    if (relMatch) return relMatch.path;
+  for (const candidate of markdownPageTargetCandidates(href, currentPath)) {
+    const match = allPages.find((p) => p.path === candidate);
+    if (match) return match.path;
   }
 
-  // 3. Try matching by last segment (slug-style lookup)
-  const slug = linkPath.includes("/") ? linkPath.split("/").pop()! : linkPath;
-  return findPageBySlug(slug, currentPath, nodes);
+  return findPageBySlug(markdownPageTargetSlug(href), currentPath, nodes);
 }
 
 export function KBEditor() {
@@ -259,6 +246,20 @@ export function KBEditor() {
 
           const href = link.getAttribute("href");
           if (!href) return false;
+
+          // Path-style wiki-links: [[folder/index.md]]
+          if (href.startsWith("#page-path:")) {
+            event.preventDefault();
+            event.stopPropagation();
+            const target = href.slice("#page-path:".length);
+            const { nodes, selectPage, expandPath } = useTreeStore.getState();
+            const activePath = useEditorStore.getState().currentPath;
+            const targetPath = resolveInternalLink(target, activePath, nodes);
+            if (targetPath) {
+              navigateToPage(targetPath, selectPage, expandPath);
+            }
+            return true;
+          }
 
           // Wiki-links: #page:slug
           if (href.startsWith("#page:")) {
