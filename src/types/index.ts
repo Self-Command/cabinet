@@ -51,6 +51,8 @@ export interface TreeNode {
     | "unknown";
   hasRepo?: boolean;
   isLinked?: boolean;
+  /** True when this directory was explicitly created as a folder. */
+  isFolder?: boolean;
   /** "google-drive" when the node comes from a Drive for Desktop mount. */
   source?: "google-drive";
   /**

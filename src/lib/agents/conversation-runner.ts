@@ -93,18 +93,22 @@ const CABINET_BLOCK_RETRY_PROMPT = [
   "SUMMARY: one short summary line of the previous turn",
   "CONTEXT: optional lightweight memory note (omit the line if none)",
   "ARTIFACT: <relative path you created or modified>",
+  "FOLDER: <relative path to folder you created>",
   "```",
   "",
   "Emit one ARTIFACT: line per file you touched in the previous turn. If you",
   "did not create or modify any file, emit exactly one line `ARTIFACT: none`.",
+  "Emit one FOLDER: line per folder/container directory you created. Omit",
+  "FOLDER lines if no folders were created.",
 ].join("\n");
 
 function buildCabinetRequirementHeader(): string {
   return [
     "Reminder (full spec at the end of this prompt): every reply must end with",
     "a ```cabinet``` fenced block containing SUMMARY, optional CONTEXT, and one",
-    "ARTIFACT: line per file you created or modified. For read-only turns emit",
-    "`ARTIFACT: none`. Replies without the block are treated as incomplete.",
+    "ARTIFACT: line per file you created or modified. Add FOLDER: lines for",
+    "folders you created. For read-only turns emit `ARTIFACT: none`. Replies",
+    "without the block are treated as incomplete.",
   ].join("\n");
 }
 
@@ -149,7 +153,9 @@ export async function buildCabinetEpilogueInstructions(options: {
     "SUMMARY: one short summary line (always required)",
     "CONTEXT: optional lightweight memory/context summary",
     "ARTIFACT: relative/path/to/file",
+    "FOLDER: relative/path/to/folder",
     "Emit one ARTIFACT: line per file you created or updated. Do not list multiple files on a single ARTIFACT: line.",
+    "Emit one FOLDER: line per folder/container directory you created. Omit FOLDER lines if none.",
     "If you did not create or modify any file (e.g. a read-only or Q&A turn),",
     "still emit exactly one line `ARTIFACT: none` so the block is well-formed.",
     "",

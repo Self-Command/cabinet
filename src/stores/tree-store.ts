@@ -56,7 +56,11 @@ interface TreeState {
   focusPath: (path: string) => void;
   toggleExpand: (path: string) => void;
   expandPath: (path: string) => void;
-  createPage: (parentPath: string, title: string) => Promise<void>;
+  createPage: (
+    parentPath: string,
+    title: string,
+    options?: { folder?: boolean }
+  ) => Promise<void>;
   deletePage: (path: string) => Promise<void>;
   movePage: (
     fromPath: string,
@@ -300,10 +304,14 @@ export const useTreeStore = create<TreeState>((set, get) => ({
     }
   },
 
-  createPage: async (parentPath: string, title: string) => {
+  createPage: async (
+    parentPath: string,
+    title: string,
+    options: { folder?: boolean } = {}
+  ) => {
     const slug = slugifyPageName(title);
     const fullPath = parentPath ? `${parentPath}/${slug}` : slug;
-    await createPageApi(fullPath, title);
+    await createPageApi(fullPath, title, options);
     if (parentPath) {
       get().expandPath(parentPath);
     }

@@ -7,6 +7,7 @@ import {
   flushClaudeStreamJson,
 } from "../../src/lib/agents/adapters/claude-stream";
 import {
+  applyFolderMarkers,
   finalizeConversation,
   parseCabinetBlock,
   readConversationMeta,
@@ -181,11 +182,13 @@ function buildStreamExtractionFingerprint(parsed: {
   summary?: string;
   contextSummary?: string;
   artifactPaths: string[];
+  folderPaths?: string[];
 }): string {
   return [
     parsed.summary ?? "",
     parsed.contextSummary ?? "",
     parsed.artifactPaths.join("|"),
+    (parsed.folderPaths ?? []).join("|"),
   ].join("§");
 }
 
@@ -223,6 +226,7 @@ async function runStreamCabinetExtraction(session: PtySession): Promise<void> {
 
   try {
     await writeConversationMeta(meta);
+    await applyFolderMarkers(parsed.folderPaths, meta.cabinetPath);
   } catch {
     session.streamExtractionFingerprint = undefined;
     return;
@@ -232,7 +236,11 @@ async function runStreamCabinetExtraction(session: PtySession): Promise<void> {
     type: "task.updated",
     taskId: session.id,
     cabinetPath: meta.cabinetPath,
-    payload: { streaming: true, streamExtracted: true },
+    payload: {
+      streaming: true,
+      streamExtracted: true,
+      ...(parsed.folderPaths.length > 0 ? { folderPaths: parsed.folderPaths } : {}),
+    },
   });
 }
 

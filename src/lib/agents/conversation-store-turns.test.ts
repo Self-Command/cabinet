@@ -3,10 +3,13 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import type { TreeNode } from "../../types";
 
 let tempRoot: string;
 type Store = typeof import("./conversation-store");
 let store: Store;
+type TreeBuilder = typeof import("../storage/tree-builder");
+let treeBuilder: TreeBuilder;
 
 before(async () => {
   tempRoot = await fs.mkdtemp(
@@ -14,10 +17,18 @@ before(async () => {
   );
   process.env.CABINET_DATA_DIR = tempRoot;
   store = await import("./conversation-store");
+  treeBuilder = await import("../storage/tree-builder");
 });
 
 after(async () => {
-  if (tempRoot) await fs.rm(tempRoot, { recursive: true, force: true });
+  if (tempRoot) {
+    await fs.rm(tempRoot, {
+      recursive: true,
+      force: true,
+      maxRetries: 5,
+      retryDelay: 100,
+    });
+  }
 });
 
 async function makeSingleShotConversation(title: string, prompt: string, agentOutput: string) {
@@ -37,6 +48,15 @@ async function makeSingleShotConversation(title: string, prompt: string, agentOu
     output: agentOutput,
   });
   return finalized!;
+}
+
+function findTreeNode(nodes: TreeNode[], targetPath: string): TreeNode | null {
+  for (const node of nodes) {
+    if (node.path === targetPath) return node;
+    const child = node.children ? findTreeNode(node.children, targetPath) : null;
+    if (child) return child;
+  }
+  return null;
 }
 
 test("readConversationTurns synthesizes turn 1 from prompt + transcript on a single-shot", async () => {
@@ -356,6 +376,89 @@ test("normalizeArtifactPaths splits mixed separators and rejects placeholders", 
     []
   );
   assert.deepEqual(store.normalizeArtifactPaths("solo/only.md"), ["solo/only.md"]);
+});
+
+test("normalizeFolderPaths accepts user folders and rejects internal folders", () => {
+  assert.deepEqual(store.normalizeFolderPaths("收件箱/AI 整理"), ["收件箱/AI 整理"]);
+  assert.deepEqual(store.normalizeFolderPaths("Course Notes"), ["Course Notes"]);
+  assert.deepEqual(store.normalizeFolderPaths(".agents/cache"), []);
+  assert.deepEqual(store.normalizeFolderPaths(".cabinet-folder"), []);
+});
+
+test("finalizeConversation marks agent-created folders inside the cabinet scope", async () => {
+  const cabinetPath = "blank-room";
+  const folderPath = "收件箱/AI 整理";
+  await fs.mkdir(path.join(tempRoot, cabinetPath, folderPath), { recursive: true });
+
+  const meta = await store.createConversation({
+    agentSlug: "general",
+    title: "Create folder",
+    trigger: "manual",
+    prompt: "User request:\n整理资料",
+    providerId: "claude-code",
+    adapterType: "claude_local",
+    cabinetPath,
+  });
+  const output = [
+    "Done.",
+    "",
+    "```cabinet",
+    "SUMMARY: Created an organized folder.",
+    "FOLDER: 收件箱/AI 整理",
+    "ARTIFACT: none",
+    "```",
+  ].join("\n");
+
+  await store.appendConversationTranscript(meta.id, output, cabinetPath);
+  const finalized = await store.finalizeConversation(
+    meta.id,
+    { status: "completed", exitCode: 0, output },
+    cabinetPath
+  );
+
+  assert.ok(finalized);
+  assert.deepEqual(finalized.artifactPaths, []);
+  const dir = path.join(tempRoot, cabinetPath, folderPath);
+  const index = await fs.readFile(path.join(dir, "index.md"), "utf8");
+  assert.match(index, /# AI 整理/);
+  await fs.access(path.join(dir, ".cabinet-folder"));
+
+  const tree = await treeBuilder.buildTree(false, true);
+  const node = findTreeNode(tree, `${cabinetPath}/${folderPath}`);
+  assert.equal(node?.isFolder, true);
+});
+
+test("finalizeConversation does not fabricate folders from folder metadata", async () => {
+  const cabinetPath = "blank-room";
+  const missingFolder = "收件箱/不存在目录";
+  const meta = await store.createConversation({
+    agentSlug: "general",
+    title: "Missing folder",
+    trigger: "manual",
+    prompt: "User request:\n记录不存在目录",
+    providerId: "claude-code",
+    adapterType: "claude_local",
+    cabinetPath,
+  });
+  const output = [
+    "Done.",
+    "",
+    "```cabinet",
+    "SUMMARY: Reported a missing folder.",
+    "FOLDER: 收件箱/不存在目录",
+    "ARTIFACT: none",
+    "```",
+  ].join("\n");
+
+  await store.finalizeConversation(
+    meta.id,
+    { status: "completed", exitCode: 0, output },
+    cabinetPath
+  );
+
+  await assert.rejects(
+    fs.access(path.join(tempRoot, cabinetPath, missingFolder, "index.md"))
+  );
 });
 
 test("isCabinetBlockMissing returns true when the agent reply has no cabinet block", () => {

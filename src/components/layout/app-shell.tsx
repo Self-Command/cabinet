@@ -300,11 +300,21 @@ export function AppShell() {
       try {
         const ev = JSON.parse(data) as {
           type?: string;
-          payload?: { artifactPaths?: unknown };
+          payload?: { artifactPaths?: unknown; folderPaths?: unknown };
         };
-        if (ev.type !== "task.updated") return;
+        if (
+          ev.type !== "task.updated" &&
+          ev.type !== "turn.appended" &&
+          ev.type !== "turn.updated"
+        ) {
+          return;
+        }
         const artifacts = ev.payload?.artifactPaths;
-        if (Array.isArray(artifacts) && artifacts.length > 0) {
+        const folders = ev.payload?.folderPaths;
+        if (
+          (Array.isArray(artifacts) && artifacts.length > 0) ||
+          (Array.isArray(folders) && folders.length > 0)
+        ) {
           scheduleRefresh();
         }
       } catch {

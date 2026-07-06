@@ -59,12 +59,16 @@ export async function savePage(
 
 export async function createPageApi(
   parentPath: string,
-  title: string
+  title: string,
+  options: { folder?: boolean } = {}
 ): Promise<void> {
   const res = await fetch(buildPageApiUrl(parentPath), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ title }),
+    body: JSON.stringify({
+      title,
+      folder: options.folder === true ? true : undefined,
+    }),
   });
   if (!res.ok) throw new Error(`Failed to create page: ${parentPath}`);
 }

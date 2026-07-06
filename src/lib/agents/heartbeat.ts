@@ -172,9 +172,11 @@ block is treated as incomplete and you will be asked to emit it again.
 SUMMARY: One short summary line of what happened. (always required)
 CONTEXT: Optional lightweight context summary to remember later.
 ARTIFACT: relative/path/to/created-or-updated-kb-file
+FOLDER: relative/path/to/created-folder
 \`\`\`
 
 Emit one ARTIFACT: line per file you created or updated. Do not combine multiple files on a single ARTIFACT: line.
+Emit one FOLDER: line per folder/container directory you created. Omit FOLDER lines if no folders were created.
 If you did not create or modify any file this heartbeat, still emit exactly one line \`ARTIFACT: none\` so the block is well-formed.
 
 Now execute your heartbeat. Check your focus areas, process inbox, review goals, and take action.`;

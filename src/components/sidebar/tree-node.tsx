@@ -23,7 +23,7 @@ import {
   Link2,
   Link2Off,
   Code,
-  Image,
+  Image as ImageIcon,
   Video,
   Music,
   Workflow,
@@ -202,7 +202,7 @@ function TreeNodeImpl({
     node.type === "app" ||
     node.type === "website";
 
-  const isMac = useMemo(isMacPlatform, []);
+  const isMac = useMemo(() => isMacPlatform(), []);
   // Hints shown on the right of the context-menu rows. Move-to is handled
   // app-wide in tree-view.tsx (Cmd+Shift+M); rename/delete are wired on the
   // selected row by the effect below. Delete is Cmd+Backspace on macOS
@@ -488,22 +488,21 @@ function TreeNodeImpl({
     }
   };
 
-  // A "folder" here is just a page used as a container — same on-disk shape
-  // as Add Sub Page (dir + index.md), so it can still hold content if the
-  // user wants. The difference is intent: we don't drop them into the
-  // editor. We expand the new node in the tree so it's immediately ready
-  // to receive children. It picks up the folder icon automatically once it
-  // has any (see hasChildren branch in the row render).
+  // A "folder" here is still a page-shaped container (dir + index.md), but it
+  // carries a hidden marker so the sidebar can distinguish an explicit empty
+  // folder from an ordinary empty page.
   const handleCreateFolder = async () => {
     if (!newFolderName.trim()) return;
     setCreatingFolder(true);
     try {
-      await createPage(node.path, newFolderName.trim());
-      const slug = slugifyPageName(newFolderName);
-      const nextPath = `${node.path}/${slug}`;
+      await createPage(node.path, newFolderName.trim(), { folder: true });
+      const createdPath = useTreeStore.getState().selectedPath;
+      const fallbackSlug = slugifyPageName(newFolderName);
+      const nextPath = createdPath || `${node.path}/${fallbackSlug}`;
       expandPath(node.path);
       expandPath(nextPath);
       selectPage(nextPath);
+      void loadPage(nextPath);
       setNewFolderName("");
       setNewFolderOpen(false);
     } catch (error) {
@@ -638,7 +637,6 @@ function TreeNodeImpl({
       // before/after zone — a legitimate way to reach the top level.
       if (node.path.startsWith(fromPath + "/")) return;
 
-      const fromName = fromPath.split("/").pop() || "";
       const nodeParent = node.path.split("/").slice(0, -1).join("/");
 
       if (zone === "into") {
@@ -805,7 +803,7 @@ function TreeNodeImpl({
             ) : node.type === "code" ? (
               <Code className="h-3.5 w-3.5 shrink-0 text-violet-400" />
             ) : node.type === "image" ? (
-              <Image className="h-3.5 w-3.5 shrink-0 text-pink-400" />
+              <ImageIcon className="h-3.5 w-3.5 shrink-0 text-pink-400" />
             ) : node.type === "video" ? (
               <Video className="h-3.5 w-3.5 shrink-0 text-cyan-400" />
             ) : node.type === "audio" ? (
@@ -835,7 +833,7 @@ function TreeNodeImpl({
               <GitBranch className="h-3.5 w-3.5 shrink-0 text-orange-400" />
             ) : node.isLinked ? (
               <Link2 className="h-3.5 w-3.5 shrink-0 text-blue-400" />
-            ) : hasChildren ? (
+            ) : node.isFolder || hasChildren ? (
               isExpanded ? (
                 <FolderOpen className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
               ) : (

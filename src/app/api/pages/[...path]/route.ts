@@ -54,7 +54,9 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     const virtualPath = segments.join("/");
     await assertWritablePath(virtualPath);
     const body = await req.json();
-    await createPage(virtualPath, body.title);
+    await createPage(virtualPath, body.title, {
+      folder: body.folder === true,
+    });
     invalidateTreeCache();
     autoCommit(virtualPath, "Add");
     return NextResponse.json({ ok: true }, { status: 201 });

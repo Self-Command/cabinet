@@ -11,6 +11,7 @@ import { googleNativeKind, parseGoogleNative } from "@/lib/google-drive/native-d
 import { DATA_DIR, virtualPathFromFs, isHiddenEntry } from "./path-utils";
 import { listDirectory, readFileContent, fileExists } from "./fs-operations";
 import { ORDER_SIDECAR } from "./order-store";
+import { FOLDER_MARKER_FILE } from "./folder-marker";
 
 const CODE_EXTENSIONS = new Set([
   // Notes and plain text
@@ -176,6 +177,7 @@ async function buildTreeRecursive(
   }
 
   for (const entry of entries) {
+    if (entry.name === FOLDER_MARKER_FILE) continue;
     if (!showHidden && isHiddenEntry(entry.name)) continue;
     if (entry.name === "CLAUDE.md") continue;
     if (entry.name === ORDER_SIDECAR) continue;
@@ -189,6 +191,7 @@ async function buildTreeRecursive(
       const hasIndexMd = await fileExists(indexMd);
       const hasIndexHtml = await fileExists(indexHtml);
       const hasCabinet = await fileExists(path.join(fullPath, CABINET_MANIFEST_FILE));
+      const isFolder = await fileExists(path.join(fullPath, FOLDER_MARKER_FILE));
 
       const repoYaml = path.join(fullPath, ".repo.yaml");
       const hasRepo = await fileExists(repoYaml);
@@ -239,6 +242,7 @@ async function buildTreeRecursive(
         type: hasCabinet ? "cabinet" : "directory",
         hasRepo: hasRepo || undefined,
         isLinked,
+        isFolder: isFolder || undefined,
         knowledgeProvider: inlineMark?.provider,
         knowledgePolicy: nodePolicy,
         frontmatter: {

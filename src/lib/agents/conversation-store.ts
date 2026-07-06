@@ -53,6 +53,8 @@ import {
   writeFileAtomic,
   writeFileContent,
 } from "../storage/fs-operations";
+import { ensureExplicitFolder } from "../storage/folder-marker";
+import { invalidateTreeCache } from "../storage/tree-builder";
 
 export const CONVERSATIONS_DIR = path.join(DATA_DIR, ".agents", ".conversations");
 
@@ -216,6 +218,7 @@ interface ParsedCabinetBlock {
   summary?: string;
   contextSummary?: string;
   artifactPaths: string[];
+  folderPaths: string[];
 }
 
 interface PromptEchoMatchers {
@@ -227,9 +230,11 @@ interface PromptEchoMatchers {
 const PLACEHOLDER_SUMMARY = "one short summary line";
 const PLACEHOLDER_CONTEXT = "optional lightweight memory/context summary";
 const PLACEHOLDER_ARTIFACT_HINT = "relative/path/to/file for every KB file you created or updated";
+const PLACEHOLDER_FOLDER_HINT = "relative/path/to/folder";
 const PLACEHOLDER_SUMMARY_FINGERPRINT = compactCabinetValue(PLACEHOLDER_SUMMARY);
 const PLACEHOLDER_CONTEXT_FINGERPRINT = compactCabinetValue(PLACEHOLDER_CONTEXT);
 const PLACEHOLDER_ARTIFACT_FINGERPRINT = compactCabinetValue(PLACEHOLDER_ARTIFACT_HINT);
+const PLACEHOLDER_FOLDER_FINGERPRINT = compactCabinetValue(PLACEHOLDER_FOLDER_HINT);
 
 function formatTimestampSegment(date: Date): string {
   return date.toISOString().replace(/[:.]/g, "-");
@@ -335,7 +340,36 @@ export function normalizeArtifactPaths(rawPath: string): string[] {
   const candidates = splitArtifactCandidates(trimmed);
   const normalizedPaths: string[] = [];
   for (const candidate of candidates) {
-    const normalized = normalizeSingleArtifactCandidate(candidate);
+    const normalized = normalizePathCandidate(candidate, { allowDirectory: false });
+    if (normalized && !normalizedPaths.includes(normalized)) {
+      normalizedPaths.push(normalized);
+    }
+  }
+  return normalizedPaths;
+}
+
+export function normalizeFolderPaths(rawPath: string): string[] {
+  const trimmed = sanitizeCabinetFieldValue(rawPath).trim();
+  if (!trimmed) return [];
+  if (isPlaceholderCabinetValue(trimmed)) return [];
+  if (compactCabinetValue(trimmed).includes(PLACEHOLDER_ARTIFACT_FINGERPRINT)) {
+    return [];
+  }
+  if (compactCabinetValue(trimmed).includes(PLACEHOLDER_FOLDER_FINGERPRINT)) {
+    return [];
+  }
+  if (
+    /(?:\*\*|##\s|User request:|Working Style|Current Context|Output Structure|Brand voice|You are the\b)/i.test(
+      trimmed
+    )
+  ) {
+    return [];
+  }
+
+  const candidates = splitArtifactCandidates(trimmed);
+  const normalizedPaths: string[] = [];
+  for (const candidate of candidates) {
+    const normalized = normalizePathCandidate(candidate, { allowDirectory: true });
     if (normalized && !normalizedPaths.includes(normalized)) {
       normalizedPaths.push(normalized);
     }
@@ -356,24 +390,28 @@ function splitArtifactCandidates(value: string): string[] {
     .filter(Boolean);
 }
 
-function normalizeSingleArtifactCandidate(raw: string): string | null {
+function normalizePathCandidate(
+  raw: string,
+  options: { allowDirectory: boolean }
+): string | null {
   const candidate = (() => {
-    const extensionMatch = raw.match(/^(.+?\.[A-Za-z0-9]+)(?:\s|$)/);
+    const extensionMatch = options.allowDirectory
+      ? null
+      : raw.match(/^(.+?\.[A-Za-z0-9]+)(?:\s|$)/);
     if (extensionMatch?.[1]) {
       return extensionMatch[1];
     }
     return raw;
   })();
 
+  let normalized = "";
   if (candidate.startsWith("/data/")) {
-    return candidate.replace(/^\/data\//, "");
+    normalized = candidate.replace(/^\/data\//, "");
+  } else if (candidate.startsWith(DATA_DIR)) {
+    normalized = virtualPathFromFs(candidate);
+  } else {
+    normalized = candidate.replace(/^\.?\//, "");
   }
-
-  if (candidate.startsWith(DATA_DIR)) {
-    return virtualPathFromFs(candidate);
-  }
-
-  let normalized = candidate.replace(/^\.?\//, "");
   // Agents sometimes emit relative "data/..." paths (no leading slash). The
   // KB tree is rooted AT data/, so the prefix is redundant and breaks path
   // matching on the UI side (tree node path has no data/ prefix).
@@ -381,7 +419,7 @@ function normalizeSingleArtifactCandidate(raw: string): string | null {
     normalized = normalized.slice(5);
   }
   if (!normalized || normalized.startsWith("..")) return null;
-  if (/^relative\/path\/to\/file\d*$/i.test(normalized)) return null;
+  if (/^relative\/path\/to\/(?:file\d*|folder)$/i.test(normalized)) return null;
 
   // Strict path guard. Agents sometimes return multi-sentence prose that the
   // upstream splitter fails to reject — fragments like "line per file you
@@ -389,10 +427,11 @@ function normalizeSingleArtifactCandidate(raw: string): string | null {
   // up as file names in the "Recent work" block (UX audit #73).
   //
   // A real artifact path either contains a directory separator or ends in a
-  // known file extension.
+  // known file extension. Explicit folder paths may be a single top-level
+  // directory name, so allow no-extension paths only for FOLDER lines.
   const hasSeparator = normalized.includes("/");
   const hasExtension = /\.[A-Za-z0-9]{1,8}$/.test(normalized);
-  if (!hasSeparator && !hasExtension) return null;
+  if (!options.allowDirectory && !hasSeparator && !hasExtension) return null;
   const pathHead = hasExtension
     ? normalized.replace(/\.[A-Za-z0-9]{1,8}$/, "")
     : normalized;
@@ -402,7 +441,7 @@ function normalizeSingleArtifactCandidate(raw: string): string | null {
   // reads like a sentence rather than a short filename.
   if (/\s/.test(pathHead)) {
     const looksLikeProse =
-      !hasExtension ||
+      (!options.allowDirectory && !hasExtension) ||
       normalized.length > 80 ||
       pathHead.split(/\s+/).filter(Boolean).length > 6 ||
       /[.;:!?]\s/.test(pathHead);
@@ -410,6 +449,15 @@ function normalizeSingleArtifactCandidate(raw: string): string | null {
   }
   // Paths we generate are short — 200 chars is already a runaway match.
   if (normalized.length > 200) return null;
+  if (
+    options.allowDirectory &&
+    normalized.split("/").some((segment) => segment.startsWith("."))
+  ) {
+    return null;
+  }
+  if (options.allowDirectory && /(?:^|\/)\.?(?:cabinet-folder|cabinet)$/.test(normalized)) {
+    return null;
+  }
   return normalized;
 }
 
@@ -434,7 +482,8 @@ function isPlaceholderCabinetValue(value?: string): boolean {
   return (
     normalized === PLACEHOLDER_SUMMARY_FINGERPRINT ||
     normalized === PLACEHOLDER_CONTEXT_FINGERPRINT ||
-    normalized === PLACEHOLDER_ARTIFACT_FINGERPRINT
+    normalized === PLACEHOLDER_ARTIFACT_FINGERPRINT ||
+    normalized === PLACEHOLDER_FOLDER_FINGERPRINT
   );
 }
 
@@ -444,6 +493,7 @@ export function parseCabinetBlock(output: string, prompt?: string): ParsedCabine
   const matches = Array.from(cleaned.matchAll(/```cabinet\s*([\s\S]*?)```/gi));
   const match = matches.at(-1);
   const artifactPaths: string[] = [];
+  const folderPaths: string[] = [];
   let summary = "";
   let contextSummary = "";
 
@@ -471,6 +521,14 @@ export function parseCabinetBlock(output: string, prompt?: string): ParsedCabine
             artifactPaths.push(normalized);
           }
         }
+        continue;
+      }
+      if (line.startsWith("FOLDER:")) {
+        for (const normalized of normalizeFolderPaths(line.slice("FOLDER:".length))) {
+          if (!folderPaths.includes(normalized)) {
+            folderPaths.push(normalized);
+          }
+        }
       }
     }
 
@@ -481,14 +539,15 @@ export function parseCabinetBlock(output: string, prompt?: string): ParsedCabine
           ? contextSummary
           : undefined,
       artifactPaths,
+      folderPaths,
     };
   }
 
   const fieldMatches = Array.from(
-    cleaned.matchAll(/(?:^|\n)\s*(SUMMARY|CONTEXT|ARTIFACT):\s*(.*)$/gm)
+    cleaned.matchAll(/(?:^|\n)\s*(SUMMARY|CONTEXT|ARTIFACT|FOLDER):\s*(.*)$/gm)
   );
   if (fieldMatches.length === 0) {
-    return { artifactPaths: [] };
+    return { artifactPaths: [], folderPaths: [] };
   }
 
   const lastSummaryMatch = [...fieldMatches].reverse().find((entry) => entry[1] === "SUMMARY");
@@ -518,6 +577,14 @@ export function parseCabinetBlock(output: string, prompt?: string): ParsedCabine
           artifactPaths.push(normalized);
         }
       }
+      continue;
+    }
+    if (field === "FOLDER") {
+      for (const normalized of normalizeFolderPaths(value)) {
+        if (!folderPaths.includes(normalized)) {
+          folderPaths.push(normalized);
+        }
+      }
     }
   }
 
@@ -528,6 +595,7 @@ export function parseCabinetBlock(output: string, prompt?: string): ParsedCabine
         ? contextSummary
         : undefined,
     artifactPaths,
+    folderPaths,
   };
 }
 
@@ -862,7 +930,7 @@ function cleanConversationOutputForParsing(output: string, prompt?: string): str
     stripAnsiText(output)
       .replace(/\u00A0/g, " ")
       .replace(/\r+/g, "\n")
-      .replace(/\s*(SUMMARY:|CONTEXT:|ARTIFACT:)\s*/g, "\n$1"),
+      .replace(/\s*(SUMMARY:|CONTEXT:|ARTIFACT:|FOLDER:)\s*/g, "\n$1"),
     prompt
   );
 }
@@ -901,7 +969,7 @@ function isClaudeIdleTailNoise(line: string): boolean {
 function hasClaudePromptTail(transcript: string, prompt?: string): boolean {
   const cleaned = cleanConversationOutputForParsing(transcript, prompt)
     .replace(/[─-]{8,}/g, "\n")
-    .replace(/❯\s*(?=(?:SUMMARY|CONTEXT|ARTIFACT):)/g, "\n");
+    .replace(/❯\s*(?=(?:SUMMARY|CONTEXT|ARTIFACT|FOLDER):)/g, "\n");
   const lines = cleaned.split("\n");
 
   for (let index = lines.length - 1; index >= 0; index -= 1) {
@@ -953,8 +1021,8 @@ export function formatConversationTranscriptForDisplay(
   const promptEchoMatchers = buildPromptEchoMatchers(prompt);
   const normalized = cleaned
     .replace(/[─-]{8,}/g, "\n")
-    .replace(/\s*(SUMMARY:|CONTEXT:|ARTIFACT:)\s*/g, "\n$1")
-    .replace(/❯\s*(?=(?:SUMMARY|CONTEXT|ARTIFACT):)/g, "\n");
+    .replace(/\s*(SUMMARY:|CONTEXT:|ARTIFACT:|FOLDER:)\s*/g, "\n$1")
+    .replace(/❯\s*(?=(?:SUMMARY|CONTEXT|ARTIFACT|FOLDER):)/g, "\n");
 
   function isTerminalNoise(trimmed: string): boolean {
     const normalizedLine = normalizeDisplayLine(trimmed);
@@ -1028,7 +1096,7 @@ export function formatConversationTranscriptForDisplay(
     for (let index = summaryIndex + 1; index < filtered.length; index += 1) {
       const trimmed = filtered[index].trim();
       if (!trimmed) continue;
-      if (/^(?:CONTEXT|ARTIFACT):/.test(trimmed)) continue;
+      if (/^(?:CONTEXT|ARTIFACT|FOLDER):/.test(trimmed)) continue;
       if (isTerminalNoise(trimmed)) {
         end = index;
         break;
@@ -1043,7 +1111,12 @@ export function formatConversationTranscriptForDisplay(
 
 function hasMeaningfulCabinetResult(transcript: string, prompt?: string): boolean {
   const parsed = parseCabinetBlock(transcript, prompt);
-  return Boolean(parsed.summary || parsed.contextSummary || parsed.artifactPaths.length > 0);
+  return Boolean(
+    parsed.summary ||
+      parsed.contextSummary ||
+      parsed.artifactPaths.length > 0 ||
+      parsed.folderPaths.length > 0
+  );
 }
 
 /**
@@ -1440,6 +1513,41 @@ export async function sanitizeArtifactCabinetBlocks(
   }
 }
 
+function scopeFolderPath(folderPath: string, cabinetPath?: string): string {
+  const cleanPath = folderPath.replace(/^\/+|\/+$/g, "");
+  const cleanCabinet = cabinetPath?.replace(/^\/+|\/+$/g, "") ?? "";
+  if (!cleanCabinet) return cleanPath;
+  if (cleanPath === cleanCabinet || cleanPath.startsWith(`${cleanCabinet}/`)) {
+    return cleanPath;
+  }
+  return `${cleanCabinet}/${cleanPath}`;
+}
+
+function scopeFolderPaths(folderPaths: string[], cabinetPath?: string): string[] {
+  return folderPaths.map((folderPath) => scopeFolderPath(folderPath, cabinetPath));
+}
+
+export async function applyFolderMarkers(
+  folderPaths: string[],
+  cabinetPath?: string
+): Promise<void> {
+  if (folderPaths.length === 0) return;
+
+  let changed = false;
+  for (const scopedPath of scopeFolderPaths(folderPaths, cabinetPath)) {
+    try {
+      changed = (await ensureExplicitFolder(scopedPath)) || changed;
+    } catch (err) {
+      console.warn(
+        `[conversation-store] failed to mark agent folder ${scopedPath}:`,
+        err
+      );
+    }
+  }
+
+  if (changed) invalidateTreeCache();
+}
+
 export async function finalizeConversation(
   id: string,
   input: {
@@ -1592,6 +1700,7 @@ export async function finalizeConversation(
   const artifactsToWrite = meta.artifactPaths.map((artifactPath) => ({
     path: artifactPath,
   }));
+  await applyFolderMarkers(parsed.folderPaths, cp);
   await Promise.all([
     writeConversationMeta(meta),
     replaceConversationArtifacts(id, artifactsToWrite, cp),
@@ -1617,6 +1726,10 @@ export async function finalizeConversation(
     status: meta.status,
     artifactPaths: meta.artifactPaths,
   };
+  const scopedFolderPaths = scopeFolderPaths(parsed.folderPaths, cp);
+  if (scopedFolderPaths.length > 0) {
+    taskUpdatedPayload.folderPaths = scopedFolderPaths;
+  }
   if (meta.errorKind) taskUpdatedPayload.errorKind = meta.errorKind;
   if (meta.errorHint) taskUpdatedPayload.errorHint = meta.errorHint;
 
@@ -2505,7 +2618,7 @@ export async function appendAgentTurn(
 
   // Parse cabinet block on the agent output (unless pending placeholder).
   const parsed = input.pending
-    ? { summary: undefined, contextSummary: undefined, artifactPaths: [] }
+    ? { summary: undefined, contextSummary: undefined, artifactPaths: [], folderPaths: [] }
     : parseCabinetBlock(input.content);
 
   const displayContent = input.pending
@@ -2563,18 +2676,27 @@ export async function appendAgentTurn(
   if (!input.pending && turn.artifacts?.length) {
     await sanitizeArtifactCabinetBlocks(turn.artifacts);
   }
+  if (!input.pending) {
+    await applyFolderMarkers(parsed.folderPaths, cp);
+  }
 
   const seq = await appendEventLog(
     id,
     { type: "turn.appended", turn: turnNumber, role: "agent", pending: !!input.pending },
     cp
   );
+  const scopedFolderPaths = scopeFolderPaths(parsed.folderPaths, cp);
   publishConversationEvent({
     type: "turn.appended",
     taskId: id,
     cabinetPath: cp,
     seq: seq ?? undefined,
-    payload: { turn: turnNumber, role: "agent", pending: !!input.pending },
+    payload: {
+      turn: turnNumber,
+      role: "agent",
+      pending: !!input.pending,
+      ...(scopedFolderPaths.length > 0 ? { folderPaths: scopedFolderPaths } : {}),
+    },
   });
 
   return turn;
@@ -2603,7 +2725,7 @@ export async function updateAgentTurn(
 
   const rawContent = patch.content ?? existing.content;
   const parsed = patch.pending
-    ? { summary: undefined, contextSummary: undefined, artifactPaths: [] }
+    ? { summary: undefined, contextSummary: undefined, artifactPaths: [], folderPaths: [] }
     : parseCabinetBlock(rawContent);
   const content = patch.pending
     ? rawContent
@@ -2657,18 +2779,26 @@ export async function updateAgentTurn(
   if (!nextTurn.pending && nextTurn.artifacts?.length) {
     await sanitizeArtifactCabinetBlocks(nextTurn.artifacts);
   }
+  if (!nextTurn.pending) {
+    await applyFolderMarkers(parsed.folderPaths, cp);
+  }
 
   const seq = await appendEventLog(
     id,
     { type: "turn.updated", turn: turnNumber, role: "agent" },
     cp
   );
+  const scopedFolderPaths = scopeFolderPaths(parsed.folderPaths, cp);
   publishConversationEvent({
     type: "turn.updated",
     taskId: id,
     cabinetPath: cp,
     seq: seq ?? undefined,
-    payload: { turn: turnNumber, role: "agent" },
+    payload: {
+      turn: turnNumber,
+      role: "agent",
+      ...(scopedFolderPaths.length > 0 ? { folderPaths: scopedFolderPaths } : {}),
+    },
   });
 
   return nextTurn;

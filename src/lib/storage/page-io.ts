@@ -27,6 +27,7 @@ import {
 } from "./references";
 import { recordRenameUndo } from "./rename-undo";
 import { slugifyPageName } from "@/lib/markdown/wiki-links";
+import { writeFolderMarkerFile } from "./folder-marker";
 
 function defaultFrontmatter(title: string): FrontMatter {
   const now = new Date().toISOString();
@@ -297,7 +298,8 @@ export async function ensureContainerDir(dirPath: string): Promise<void> {
 
 export async function createPage(
   virtualPath: string,
-  title: string
+  title: string,
+  options: { folder?: boolean } = {}
 ): Promise<void> {
   // A sub-page under a standalone page must first turn that page into a
   // container; otherwise the new `<parent>/` dir shadows and orphans the
@@ -321,6 +323,9 @@ export async function createPage(
   };
   const output = matter.stringify(`\n# ${title}\n`, fm);
   await writeFileContent(filePath, output);
+  if (options.folder === true) {
+    await writeFolderMarkerFile(dirPath);
+  }
 }
 
 export async function deletePage(virtualPath: string): Promise<void> {

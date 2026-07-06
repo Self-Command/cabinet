@@ -33,7 +33,9 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    await createPage("", body.title);
+    await createPage("", body.title, {
+      folder: body.folder === true,
+    });
     invalidateTreeCache();
     autoCommit("", "Add");
     return NextResponse.json({ ok: true }, { status: 201 });
