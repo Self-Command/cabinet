@@ -324,12 +324,12 @@ export async function createPage(
 }
 
 export async function deletePage(virtualPath: string): Promise<void> {
-  const resolved = resolveContentPath(virtualPath);
-  const stat = await fs.lstat(resolved).catch(() => null);
+  const entry = await resolveExistingPageEntry(virtualPath);
+  const stat = await fs.lstat(entry.fsPath).catch(() => null);
   if (stat?.isSymbolicLink()) {
-    await unlinkSymlink(resolved);
+    await unlinkSymlink(entry.fsPath);
   } else {
-    await deleteFileOrDir(resolved);
+    await deleteFileOrDir(entry.fsPath);
   }
 }
 
