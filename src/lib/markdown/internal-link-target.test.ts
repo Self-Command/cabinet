@@ -5,6 +5,7 @@ import {
   markdownPageTargetCandidates,
   markdownPageTargetSlug,
   normalizeMarkdownPageTarget,
+  wikiLinkHrefForPageName,
 } from "@/lib/markdown/internal-link-target";
 import { markdownToHtml } from "@/lib/markdown/to-html";
 
@@ -50,6 +51,18 @@ test("detects wiki links that should resolve as paths", () => {
   assert.equal(isPathLikeWikiTarget("收件箱"), false);
   assert.equal(isPathLikeWikiTarget("收件箱/index.md"), true);
   assert.equal(isPathLikeWikiTarget("中文文件.md"), true);
+});
+
+test("builds wiki-link hrefs from the shared resolver", () => {
+  assert.equal(wikiLinkHrefForPageName("收件箱"), "#page:收件箱");
+  assert.equal(
+    wikiLinkHrefForPageName("收件箱/index.md"),
+    "#page-path:%E6%94%B6%E4%BB%B6%E7%AE%B1%2Findex.md"
+  );
+  assert.equal(
+    wikiLinkHrefForPageName("link-test/test-file.md"),
+    "#page-path:link-test%2Ftest-file.md"
+  );
 });
 
 test("renders path-style wiki links with a path resolver href", async () => {

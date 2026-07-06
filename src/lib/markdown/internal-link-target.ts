@@ -83,3 +83,9 @@ export function isPathLikeWikiTarget(target: string): boolean {
   const value = target.trim();
   return /[\\/]/.test(value) || /\.md(?:[#?].*)?$/i.test(value);
 }
+
+export function wikiLinkHrefForPageName(pageName: string): string {
+  return isPathLikeWikiTarget(pageName)
+    ? `#page-path:${encodeURIComponent(pageName)}`
+    : `#page:${slugifyPageName(pageName)}`;
+}

@@ -1,6 +1,6 @@
 import { Mark, mergeAttributes } from "@tiptap/core";
 import { InputRule } from "@tiptap/core";
-import { slugifyPageName } from "@/lib/markdown/wiki-links";
+import { wikiLinkHrefForPageName } from "@/lib/markdown/internal-link-target";
 
 export const WikiLink = Mark.create({
   name: "wikiLink",
@@ -29,13 +29,12 @@ export const WikiLink = Mark.create({
 
   renderHTML({ HTMLAttributes }) {
     const pageName = HTMLAttributes["data-page-name"] || "";
-    const slug = slugifyPageName(pageName);
 
     return [
       "a",
       mergeAttributes(HTMLAttributes, {
         "data-wiki-link": "true",
-        href: `#page:${slug}`,
+        href: wikiLinkHrefForPageName(pageName),
         class: "wiki-link",
       }),
       0,
