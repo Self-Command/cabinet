@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FileText } from "lucide-react";
+import { FileText, Maximize2 } from "lucide-react";
 import { DocxViewer } from "./docx-viewer";
 import { OfficeChrome } from "./office-chrome";
 import {
@@ -10,6 +10,7 @@ import {
   OfficeRenderFallback,
   OfficeUnsupportedFile,
 } from "./office-preview-states";
+import { ToolbarButton } from "@/components/layout/toolbar-button";
 import { ViewerLayout } from "@/components/layout/viewer-layout";
 import { assetUrlFor } from "@/lib/cabinets/asset-url";
 import {
@@ -105,6 +106,7 @@ async function loadUniverDoc(
 }
 
 export function UniverDocxViewer({ path, title }: Props) {
+  const shellRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const univerRef = useRef<UniverHandle | null>(null);
   const [status, setStatus] = useState<PreviewStatus>("checking");
@@ -222,9 +224,28 @@ export function UniverDocxViewer({ path, title }: Props) {
     );
   }
 
+  const requestFullscreen = () => {
+    void shellRef.current?.requestFullscreen?.().catch(() => undefined);
+  };
+
+  const toolbar = (
+    <OfficeChrome path={path} title={title} extLabel="DOCX">
+      <ToolbarButton
+        icon={Maximize2}
+        label="Fullscreen"
+        iconOnly
+        disabled={status !== "ready"}
+        onClick={requestFullscreen}
+      />
+    </OfficeChrome>
+  );
+
   return (
-    <ViewerLayout toolbar={<OfficeChrome path={path} title={title} extLabel="DOCX" />}>
-      <div className="relative flex min-h-0 flex-1 flex-col bg-background">
+    <ViewerLayout toolbar={toolbar}>
+      <div
+        ref={shellRef}
+        className="relative flex min-h-0 flex-1 flex-col bg-background"
+      >
         <div className="flex shrink-0 items-center gap-2 border-b border-border bg-muted/30 px-3 py-1.5 text-[12px] text-muted-foreground">
           <span className="font-medium text-foreground">Univer local preview</span>
           <span>browser-only DOCX renderer</span>

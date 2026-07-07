@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { Download, FolderOpen, ExternalLink } from "lucide-react";
 import { ViewerToolbar } from "@/components/layout/viewer-toolbar";
 import { ToolbarButton } from "@/components/layout/toolbar-button";
@@ -15,9 +16,16 @@ interface OfficeChromeProps {
   external?: { label: string; href: string };
   /** Hide the "Open in Finder" button (useful for Google embeds that aren't on disk). */
   hideFinder?: boolean;
+  children?: ReactNode;
 }
 
-export function OfficeChrome({ path, extLabel, external, hideFinder }: OfficeChromeProps) {
+export function OfficeChrome({
+  path,
+  extLabel,
+  external,
+  hideFinder,
+  children,
+}: OfficeChromeProps) {
   const { t } = useLocale();
   const assetUrl = assetUrlFor(path);
   const filename = path.split("/").pop() || path;
@@ -44,6 +52,7 @@ export function OfficeChrome({ path, extLabel, external, hideFinder }: OfficeChr
           target="_blank"
         />
       )}
+      {children}
       {!hideFinder && (
         <ToolbarButton
           icon={FolderOpen}

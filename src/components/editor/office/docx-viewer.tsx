@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { OfficeChrome } from "./office-chrome";
 import { ViewerLayout } from "@/components/layout/viewer-layout";
-import { Loader2 } from "lucide-react";
+import { Loader2, Maximize2 } from "lucide-react";
+import { ToolbarButton } from "@/components/layout/toolbar-button";
 import { assetUrlFor } from "@/lib/cabinets/asset-url";
 
 interface Props {
@@ -12,6 +13,7 @@ interface Props {
 }
 
 export function DocxViewer({ path, title }: Props) {
+  const shellRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -63,9 +65,25 @@ export function DocxViewer({ path, title }: Props) {
     };
   }, [assetUrl]);
 
+  const requestFullscreen = () => {
+    void shellRef.current?.requestFullscreen?.().catch(() => undefined);
+  };
+
+  const toolbar = (
+    <OfficeChrome path={path} title={title} extLabel="DOCX">
+      <ToolbarButton
+        icon={Maximize2}
+        label="Fullscreen"
+        iconOnly
+        disabled={loading || !!error}
+        onClick={requestFullscreen}
+      />
+    </OfficeChrome>
+  );
+
   return (
-    <ViewerLayout toolbar={<OfficeChrome path={path} title={title} extLabel="DOCX" />}>
-      <div className="flex-1 overflow-y-auto bg-muted/30">
+    <ViewerLayout toolbar={toolbar}>
+      <div ref={shellRef} className="flex-1 overflow-y-auto bg-muted/30">
         {loading && !error && (
           <div className="h-full flex items-center justify-center text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin mr-2" />
