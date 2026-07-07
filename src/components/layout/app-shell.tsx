@@ -27,6 +27,13 @@ const XlsxViewer = dynamic(
   () => import("@/components/editor/office/xlsx-viewer").then((m) => m.XlsxViewer),
   { ssr: false }
 );
+const UniverXlsxViewer = dynamic(
+  () =>
+    import("@/components/editor/office/univer-xlsx-viewer").then(
+      (m) => m.UniverXlsxViewer
+    ),
+  { ssr: false }
+);
 const PptxViewer = dynamic(
   () => import("@/components/editor/office/pptx-viewer").then((m) => m.PptxViewer),
   { ssr: false }
@@ -136,6 +143,7 @@ import { useRoomsStore } from "@/stores/rooms-store";
 
 const DISMISSED_UPDATE_STORAGE_KEY = "cabinet.dismissed-update-version";
 const WIZARD_DONE_STORAGE_KEY = "cabinet.wizard-done";
+const UNIVER_OFFICE_STORAGE_KEY = "cabinet.univer-office-preview";
 // sessionStorage key set by Settings → Storage → Reset onboarding. While
 // present we (a) skip the silent-accept of dataDirConfirmed and (b) skip the
 // agents-config self-correction that would otherwise rewrite wizard-done="1"
@@ -242,6 +250,7 @@ export function AppShell() {
   });
 
   const loadProviders = useAppStore((s) => s.loadProviders);
+  const [useUniverOfficePreview, setUseUniverOfficePreview] = useState(false);
 
   // Audit #017: page tab title should use the human title from frontmatter
   // when present, falling back to the slug. Read from the editor store so the
@@ -330,6 +339,16 @@ export function AppShell() {
   useEffect(() => {
     void loadProviders();
   }, [loadProviders]);
+
+  useEffect(() => {
+    try {
+      setUseUniverOfficePreview(
+        window.localStorage.getItem(UNIVER_OFFICE_STORAGE_KEY) === "1"
+      );
+    } catch {
+      setUseUniverOfficePreview(false);
+    }
+  }, []);
 
   // Rooms v3: you are always inside a room. The data-dir root is a neutral
   // "home" container with no content, so when the app lands on the bare home
@@ -999,7 +1018,11 @@ export function AppShell() {
     if (isXlsx && (selectedNode || selectedPath)) {
       const p = selectedNode?.path || selectedPath!;
       const t = selectedNode?.frontmatter?.title || selectedNode?.name || p.split("/").pop() || "Spreadsheet";
-      return <XlsxViewer path={p} title={t} />;
+      return useUniverOfficePreview ? (
+        <UniverXlsxViewer path={p} title={t} />
+      ) : (
+        <XlsxViewer path={p} title={t} />
+      );
     }
 
     if (isPptx && (selectedNode || selectedPath)) {
