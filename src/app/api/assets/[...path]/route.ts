@@ -37,6 +37,7 @@ const MIME_TYPES: Record<string, string> = {
   ".yml": "text/yaml",
   ".tex": "text/x-tex",
   ".txt": "text/plain",
+  ".doc": "application/msword",
   ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   ".xlsm": "application/vnd.ms-excel.sheet.macroEnabled.12",

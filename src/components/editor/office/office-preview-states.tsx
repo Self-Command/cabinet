@@ -1,7 +1,7 @@
 "use client";
 
 import type { LucideIcon } from "lucide-react";
-import { Download, FileText, Loader2, RotateCcw } from "lucide-react";
+import { Download, FileText, FolderOpen, Loader2, RotateCcw } from "lucide-react";
 import { OfficeChrome } from "./office-chrome";
 import { ViewerLayout } from "@/components/layout/viewer-layout";
 import { Button } from "@/components/ui/button";
@@ -161,6 +161,62 @@ export function OfficeRenderFallback({
                 {fallbackLabel}
               </Button>
             )}
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => downloadAsset(assetUrl, filename)}
+            >
+              <Download className="h-3.5 w-3.5" />
+              Download
+            </Button>
+          </div>
+        </div>
+      </div>
+    </ViewerLayout>
+  );
+}
+
+export function OfficeUnsupportedFile({
+  path,
+  title,
+  extLabel,
+  assetUrl,
+  filename,
+  message,
+}: {
+  path: string;
+  title: string;
+  extLabel: string;
+  assetUrl: string;
+  filename: string;
+  message: string;
+}) {
+  const revealInFinder = async () => {
+    try {
+      await fetch("/api/system/reveal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path }),
+      });
+    } catch {
+      // ignore
+    }
+  };
+
+  return (
+    <ViewerLayout toolbar={<OfficeChrome path={path} title={title} extLabel={extLabel} />}>
+      <div className="flex min-h-0 flex-1 items-center justify-center bg-background p-6">
+        <div className="w-full max-w-md space-y-4 rounded-lg border border-border bg-card p-5 text-center shadow-sm">
+          <FileText className="mx-auto h-8 w-8 text-muted-foreground" />
+          <div className="space-y-1">
+            <h2 className="text-sm font-semibold text-foreground">Preview unavailable</h2>
+            <p className="text-xs leading-5 text-muted-foreground">{message}</p>
+          </div>
+          <div className="flex flex-wrap justify-center gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={revealInFinder}>
+              <FolderOpen className="h-3.5 w-3.5" />
+              Reveal
+            </Button>
             <Button
               type="button"
               size="sm"

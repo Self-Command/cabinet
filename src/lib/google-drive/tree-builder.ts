@@ -119,6 +119,7 @@ async function buildDriveNodes(
       ".gif": "image",
       ".webp": "image",
       ".svg": "image",
+      ".doc": "docx",
       ".docx": "docx",
       ".xlsx": "xlsx",
       ".xlsm": "xlsx",

@@ -768,7 +768,7 @@ export function AppShell() {
         const lower = selectedPath.toLowerCase();
         if (lower.endsWith(".csv")) return "csv";
         if (lower.endsWith(".pdf")) return "pdf";
-        if (lower.endsWith(".docx")) return "docx";
+        if (lower.endsWith(".doc") || lower.endsWith(".docx")) return "docx";
         if (lower.endsWith(".xlsx") || lower.endsWith(".xlsm")) return "xlsx";
         if (lower.endsWith(".pptx")) return "pptx";
         if (lower.endsWith(".ipynb")) return "notebook";

@@ -8,11 +8,13 @@ import {
   OfficeLargeFilePrompt,
   OfficePreviewSkeleton,
   OfficeRenderFallback,
+  OfficeUnsupportedFile,
 } from "./office-preview-states";
 import { ViewerLayout } from "@/components/layout/viewer-layout";
 import { assetUrlFor } from "@/lib/cabinets/asset-url";
 import {
   getAssetSize,
+  isZipBuffer,
   OFFICE_LARGE_FILE_BYTES,
 } from "@/lib/office/browser-file";
 import { docxBufferToUniverDocData } from "@/lib/office/docx-to-univer";
@@ -21,7 +23,14 @@ type UniverHandle = {
   dispose?: () => void;
 };
 
-type PreviewStatus = "checking" | "prompt" | "loading" | "ready" | "legacy" | "error";
+type PreviewStatus =
+  | "checking"
+  | "prompt"
+  | "loading"
+  | "ready"
+  | "legacy"
+  | "unsupported"
+  | "error";
 
 type UniverDocModules = [
   typeof import("@univerjs/presets"),
@@ -136,6 +145,10 @@ export function UniverDocxViewer({ path, title }: Props) {
         if (!response.ok) throw new Error(`Failed to load file (${response.status})`);
         const buffer = await response.arrayBuffer();
         if (cancelled) return;
+        if (!isZipBuffer(buffer)) {
+          setStatus("unsupported");
+          return;
+        }
         univerRef.current = await loadUniverDoc(container, buffer, filename, setStage);
         if (!cancelled) setStatus("ready");
       } catch (err) {
@@ -156,6 +169,19 @@ export function UniverDocxViewer({ path, title }: Props) {
 
   if (status === "legacy") {
     return <DocxViewer path={path} title={title} />;
+  }
+
+  if (status === "unsupported") {
+    return (
+      <OfficeUnsupportedFile
+        path={path}
+        title={title}
+        extLabel="DOC"
+        assetUrl={assetUrl}
+        filename={filename}
+        message="This is a legacy binary Word .doc file, not a DOCX/OOXML document. Cabinet can keep and download it, but inline browser preview requires converting it to .docx first."
+      />
+    );
   }
 
   if (status === "error") {

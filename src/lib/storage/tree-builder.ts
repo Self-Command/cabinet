@@ -45,7 +45,7 @@ const MERMAID_EXTENSIONS = new Set([".mermaid", ".mmd"]);
 const LATEX_EXTENSIONS = new Set([".tex", ".latex"]);
 
 // Office types that Cabinet can render inline.
-const DOCX_EXTENSIONS = new Set([".docx"]);
+const DOCX_EXTENSIONS = new Set([".doc", ".docx"]);
 const XLSX_EXTENSIONS = new Set([".xlsx", ".xlsm"]);
 const PPTX_EXTENSIONS = new Set([".pptx"]);
 
@@ -57,7 +57,7 @@ const NOTEBOOK_EXTENSIONS = new Set([".ipynb"]);
 // Everything not in a known set is silently skipped.
 const UNKNOWN_EXTENSIONS = new Set([
   // Legacy Office / proprietary formats we don't render inline yet
-  ".doc", ".ppt", ".xls",
+  ".ppt", ".xls",
   ".pages", ".numbers", ".key", ".odt", ".ods", ".odp",
   // Archives
   ".zip", ".tar", ".tgz", ".gz", ".rar", ".7z",
