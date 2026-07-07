@@ -20,7 +20,10 @@ import dynamic from "next/dynamic";
 import { GoogleDocViewer } from "@/components/editor/google-doc-viewer";
 
 const DocxViewer = dynamic(
-  () => import("@/components/editor/office/docx-viewer").then((m) => m.DocxViewer),
+  () =>
+    import("@/components/editor/office/univer-docx-viewer").then(
+      (m) => m.UniverDocxViewer
+    ),
   { ssr: false }
 );
 const XlsxViewer = dynamic(

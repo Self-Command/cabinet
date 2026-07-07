@@ -6,6 +6,7 @@ import { RoomThemeSync } from "@/components/layout/room-theme-sync";
 import { LocaleInitializer } from "@/components/layout/locale-initializer";
 import { LocaleDirectionProvider } from "@/components/layout/locale-direction-provider";
 import "@univerjs/preset-sheets-core/lib/index.css";
+import "@univerjs/preset-docs-core/lib/index.css";
 import "./globals.css";
 
 // Runs before hydration so RTL/LTR + lang are applied to <html> on first paint.
