@@ -225,12 +225,15 @@ function PresentationOverlay({
   const slideRef = useRef<HTMLDivElement | null>(null);
   const viewerRef = useRef<AidenPptxViewer | null>(null);
   const initialSlideRef = useRef(initialSlide);
+  const indexRef = useRef(initialSlide);
+  const onExitRef = useRef(onExit);
   const [index, setIndex] = useState(initialSlide);
   const [stage, setStage] = useState("Starting presentation...");
 
   const goTo = useCallback(
     (nextIndex: number) => {
       const clamped = Math.min(Math.max(nextIndex, 0), Math.max(slideCount - 1, 0));
+      indexRef.current = clamped;
       setIndex(clamped);
       onSlideChange(clamped);
       void viewerRef.current?.goToSlide(clamped);
@@ -282,12 +285,30 @@ function PresentationOverlay({
   }, [buffer]);
 
   useEffect(() => {
+    indexRef.current = index;
+  }, [index]);
+
+  useEffect(() => {
+    onExitRef.current = onExit;
+  }, [onExit]);
+
+  useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
     void root.requestFullscreen?.().catch(() => undefined);
     const onFullscreenChange = () => {
-      if (!document.fullscreenElement) onExit();
+      if (!document.fullscreenElement) onExitRef.current();
     };
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    return () => {
+      document.removeEventListener("fullscreenchange", onFullscreenChange);
+      if (document.fullscreenElement === root) {
+        void document.exitFullscreen().catch(() => undefined);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (
         event.key === "ArrowRight" ||
@@ -296,28 +317,23 @@ function PresentationOverlay({
         event.key === " "
       ) {
         event.preventDefault();
-        goTo(index + 1);
+        goTo(indexRef.current + 1);
       } else if (
         event.key === "ArrowLeft" ||
         event.key === "ArrowUp" ||
         event.key === "PageUp"
       ) {
         event.preventDefault();
-        goTo(index - 1);
+        goTo(indexRef.current - 1);
       } else if (event.key === "Escape") {
-        onExit();
+        onExitRef.current();
       }
     };
-    document.addEventListener("fullscreenchange", onFullscreenChange);
     window.addEventListener("keydown", onKeyDown);
     return () => {
-      document.removeEventListener("fullscreenchange", onFullscreenChange);
       window.removeEventListener("keydown", onKeyDown);
-      if (document.fullscreenElement === root) {
-        void document.exitFullscreen().catch(() => undefined);
-      }
     };
-  }, [goTo, index, onExit]);
+  }, [goTo]);
 
   return (
     <div
