@@ -1,25 +1,30 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Download, FileSpreadsheet, Loader2 } from "lucide-react";
+import { Download, FileSpreadsheet } from "lucide-react";
 import { XlsxViewer } from "./xlsx-viewer";
 import { OfficeChrome } from "./office-chrome";
+import { OfficePreviewSkeleton } from "./office-preview-states";
 import { ViewerLayout } from "@/components/layout/viewer-layout";
 import { Button } from "@/components/ui/button";
 import { assetUrlFor } from "@/lib/cabinets/asset-url";
 import {
   downloadAsset,
+  fetchAssetArrayBuffer,
   formatFileSize,
   getAssetSize,
+  isOleCompoundBuffer,
+  isZipBuffer,
   OFFICE_LARGE_FILE_BYTES,
 } from "@/lib/office/browser-file";
+import { convertLegacyOfficeFile } from "@/lib/office/legacy-conversion";
 import { xlsxWorkbookToUniverData } from "@/lib/office/xlsx-to-univer";
 
 type UniverHandle = {
   dispose?: () => void;
 };
 
-type PreviewStatus = "checking" | "prompt" | "loading" | "ready" | "legacy";
+type PreviewStatus = "checking" | "converting" | "prompt" | "loading" | "ready" | "legacy";
 
 type UniverModules = [
   typeof import("@univerjs/presets"),
@@ -74,34 +79,21 @@ async function loadUniverSheet(
     presets: [
       sheetsPreset.UniverSheetsCorePreset({
         container,
-        header: false,
-        toolbar: false,
-        footer: false,
+        header: true,
+        toolbar: true,
+        footer: {
+          sheetBar: true,
+          statisticBar: true,
+          menus: true,
+          zoomSlider: true,
+          addSheetButtonConfig: { show: true },
+        },
       }),
     ],
   });
 
   univerAPI.createWorkbook(workbookData);
   return univer as UniverHandle;
-}
-
-function SpreadsheetSkeleton({ stage }: { stage: string }) {
-  return (
-    <div className="absolute inset-0 z-10 flex flex-col bg-background/95">
-      <div className="flex shrink-0 items-center gap-2 border-b border-border bg-muted/30 px-3 py-1.5 text-[12px] text-muted-foreground">
-        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-        <span>{stage}</span>
-      </div>
-      <div className="grid flex-1 grid-cols-[48px_repeat(6,minmax(72px,1fr))] grid-rows-[28px_repeat(14,32px)] overflow-hidden p-4">
-        {Array.from({ length: 105 }).map((_, index) => (
-          <div
-            key={index}
-            className="border-b border-r border-border/60 bg-muted/20"
-          />
-        ))}
-      </div>
-    </div>
-  );
 }
 
 function LargeFilePrompt({
@@ -159,12 +151,19 @@ function LargeFilePrompt({
 export function UniverXlsxViewer({ path, title }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const univerRef = useRef<UniverHandle | null>(null);
+  const [activePath, setActivePath] = useState(path);
   const [status, setStatus] = useState<PreviewStatus>("checking");
   const [stage, setStage] = useState("Checking file size...");
+  const [progress, setProgress] = useState<number | null>(null);
   const [fileSize, setFileSize] = useState<number | null>(null);
   const [forceOpen, setForceOpen] = useState(false);
-  const assetUrl = useMemo(() => assetUrlFor(path), [path]);
-  const filename = path.split("/").pop() || title || "Spreadsheet";
+  const assetUrl = useMemo(() => assetUrlFor(activePath), [activePath]);
+  const filename = activePath.split("/").pop() || title || "Spreadsheet";
+
+  useEffect(() => {
+    setActivePath(path);
+    setForceOpen(false);
+  }, [path]);
 
   useEffect(() => {
     let cancelled = false;
@@ -176,10 +175,13 @@ export function UniverXlsxViewer({ path, title }: Props) {
     univerRef.current = null;
     setStatus("checking");
     setStage("Checking file size...");
+    setProgress(null);
 
     void (async () => {
       try {
-        const size = await getAssetSize(assetUrl);
+        const loadPath = activePath;
+        const nextAssetUrl = assetUrlFor(loadPath);
+        const size = await getAssetSize(nextAssetUrl);
         if (cancelled) return;
         setFileSize(size);
 
@@ -190,10 +192,21 @@ export function UniverXlsxViewer({ path, title }: Props) {
 
         setStatus("loading");
         setStage("Downloading workbook...");
-        const response = await fetch(assetUrl);
-        if (!response.ok) throw new Error(`Failed to load file (${response.status})`);
-        const buffer = await response.arrayBuffer();
+        const buffer = await fetchAssetArrayBuffer(nextAssetUrl, (next) => {
+          if (!cancelled) setProgress(next.percent);
+        });
         if (cancelled) return;
+        if (isOleCompoundBuffer(buffer)) {
+          setStatus("converting");
+          setStage("Converting legacy Excel file to XLSX...");
+          const converted = await convertLegacyOfficeFile(loadPath);
+          if (cancelled) return;
+          setActivePath(converted.path);
+          return;
+        }
+        if (!isZipBuffer(buffer)) {
+          throw new Error("This file is not a supported spreadsheet");
+        }
         univerRef.current = await loadUniverSheet(container, buffer, filename, setStage);
         if (!cancelled) setStatus("ready");
       } catch {
@@ -207,7 +220,7 @@ export function UniverXlsxViewer({ path, title }: Props) {
       univerRef.current = null;
       container.innerHTML = "";
     };
-  }, [assetUrl, filename, forceOpen]);
+  }, [activePath, filename, forceOpen]);
 
   if (status === "legacy") {
     return <XlsxViewer path={path} title={title} />;
@@ -216,7 +229,7 @@ export function UniverXlsxViewer({ path, title }: Props) {
   if (status === "prompt") {
     return (
       <LargeFilePrompt
-        path={path}
+        path={activePath}
         title={title}
         assetUrl={assetUrl}
         filename={filename}
@@ -231,14 +244,21 @@ export function UniverXlsxViewer({ path, title }: Props) {
   }
 
   return (
-    <ViewerLayout toolbar={<OfficeChrome path={path} title={title} extLabel="XLSX" />}>
+    <ViewerLayout toolbar={<OfficeChrome path={activePath} title={title} extLabel="XLSX" />}>
       <div className="relative flex min-h-0 flex-1 flex-col bg-background">
         <div className="flex shrink-0 items-center gap-2 border-b border-border bg-muted/30 px-3 py-1.5 text-[12px] text-muted-foreground">
-          <span className="font-medium text-foreground">Univer local preview</span>
+          <span className="font-medium text-foreground">Univer spreadsheet editor</span>
           <span>browser-only XLSX renderer</span>
+          {path !== activePath && (
+            <span className="text-foreground">converted from legacy Excel</span>
+          )}
         </div>
-        {(status === "checking" || status === "loading") && (
-          <SpreadsheetSkeleton stage={stage} />
+        {(status === "checking" || status === "converting" || status === "loading") && (
+          <OfficePreviewSkeleton
+            stage={stage}
+            variant="spreadsheet"
+            progress={progress}
+          />
         )}
         <div ref={containerRef} className="min-h-0 flex-1" />
       </div>

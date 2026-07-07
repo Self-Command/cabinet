@@ -52,6 +52,9 @@ RUN apt-get update \
     curl \
     git \
     gosu \
+    libreoffice-calc \
+    libreoffice-impress \
+    libreoffice-writer \
     openssh-client \
     python3 \
   && rm -rf /var/lib/apt/lists/* \

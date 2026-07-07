@@ -21,8 +21,8 @@ import { GoogleDocViewer } from "@/components/editor/google-doc-viewer";
 
 const DocxViewer = dynamic(
   () =>
-    import("@/components/editor/office/univer-docx-viewer").then(
-      (m) => m.UniverDocxViewer
+    import("@/components/editor/office/superdoc-word-viewer").then(
+      (m) => m.SuperDocWordViewer
     ),
   { ssr: false }
 );
@@ -769,8 +769,8 @@ export function AppShell() {
         if (lower.endsWith(".csv")) return "csv";
         if (lower.endsWith(".pdf")) return "pdf";
         if (lower.endsWith(".doc") || lower.endsWith(".docx")) return "docx";
-        if (lower.endsWith(".xlsx") || lower.endsWith(".xlsm")) return "xlsx";
-        if (lower.endsWith(".pptx")) return "pptx";
+        if (lower.endsWith(".xlsx") || lower.endsWith(".xlsm") || lower.endsWith(".xls")) return "xlsx";
+        if (lower.endsWith(".pptx") || lower.endsWith(".ppt")) return "pptx";
         if (lower.endsWith(".ipynb")) return "notebook";
         if (lower.endsWith(".mmd") || lower.endsWith(".mermaid")) return "mermaid";
         if (lower.endsWith(".tex") || lower.endsWith(".latex")) return "latex";

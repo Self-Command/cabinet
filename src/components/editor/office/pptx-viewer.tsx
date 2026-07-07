@@ -17,15 +17,18 @@ import {
 } from "./office-preview-states";
 import { ViewerLayout } from "@/components/layout/viewer-layout";
 import { ToolbarButton } from "@/components/layout/toolbar-button";
-import { Button } from "@/components/ui/button";
 import { assetUrlFor } from "@/lib/cabinets/asset-url";
 import {
+  fetchAssetArrayBuffer,
   getAssetSize,
+  isOleCompoundBuffer,
+  isZipBuffer,
   OFFICE_LARGE_FILE_BYTES,
 } from "@/lib/office/browser-file";
+import { convertLegacyOfficeFile } from "@/lib/office/legacy-conversion";
 import { cn } from "@/lib/utils";
 
-type PreviewStatus = "checking" | "prompt" | "loading" | "ready" | "legacy";
+type PreviewStatus = "checking" | "converting" | "prompt" | "loading" | "ready" | "legacy";
 type AidenPptxModules = typeof import("@aiden0z/pptx-renderer");
 type AidenPptxViewer = InstanceType<AidenPptxModules["PptxViewer"]>;
 
@@ -212,14 +215,12 @@ function PresentationOverlay({
   buffer,
   initialSlide,
   slideCount,
-  title,
   onExit,
   onSlideChange,
 }: {
   buffer: ArrayBuffer;
   initialSlide: number;
   slideCount: number;
-  title: string;
   onExit: () => void;
   onSlideChange: (index: number) => void;
 }) {
@@ -291,10 +292,19 @@ function PresentationOverlay({
       if (!document.fullscreenElement) onExit();
     };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "ArrowRight" || event.key === "PageDown" || event.key === " ") {
+      if (
+        event.key === "ArrowRight" ||
+        event.key === "ArrowDown" ||
+        event.key === "PageDown" ||
+        event.key === " "
+      ) {
         event.preventDefault();
         goTo(index + 1);
-      } else if (event.key === "ArrowLeft" || event.key === "PageUp") {
+      } else if (
+        event.key === "ArrowLeft" ||
+        event.key === "ArrowUp" ||
+        event.key === "PageUp"
+      ) {
         event.preventDefault();
         goTo(index - 1);
       } else if (event.key === "Escape") {
@@ -315,25 +325,16 @@ function PresentationOverlay({
   return (
     <div
       ref={rootRef}
-      className="fixed inset-0 z-[100] flex flex-col bg-black text-white"
+      className="group fixed inset-0 z-[100] flex flex-col bg-black text-white"
     >
-      <div className="flex h-11 shrink-0 items-center justify-between border-b border-white/10 bg-black/95 px-3">
-        <div className="min-w-0 truncate text-sm">{title}</div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-white/60">
-            {index + 1} / {Math.max(slideCount, 1)}
-          </span>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            className="text-white hover:bg-white/10 hover:text-white"
-            onClick={onExit}
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
+      <button
+        type="button"
+        className="absolute right-3 top-3 z-20 rounded bg-black/50 p-2 text-white/70 opacity-0 transition-opacity hover:text-white focus:opacity-100 group-hover:opacity-100"
+        onClick={onExit}
+        aria-label="Exit presentation"
+      >
+        <X className="h-4 w-4" />
+      </button>
       <div className="relative min-h-0 flex-1">
         {stage && (
           <div className="absolute inset-0 z-10 flex items-center justify-center text-sm text-white/70">
@@ -342,29 +343,8 @@ function PresentationOverlay({
         )}
         <div ref={slideRef} className="h-full w-full overflow-hidden" />
       </div>
-      <div className="flex h-12 shrink-0 items-center justify-center gap-3 border-t border-white/10 bg-black/95">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="text-white hover:bg-white/10 hover:text-white"
-          disabled={index <= 0}
-          onClick={() => goTo(index - 1)}
-        >
-          <ChevronLeft className="h-4 w-4" />
-          Previous
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="text-white hover:bg-white/10 hover:text-white"
-          disabled={index >= slideCount - 1}
-          onClick={() => goTo(index + 1)}
-        >
-          Next
-          <ChevronRight className="h-4 w-4" />
-        </Button>
+      <div className="pointer-events-none absolute bottom-3 left-1/2 z-20 -translate-x-1/2 rounded bg-black/50 px-2 py-1 text-xs text-white/60 opacity-0 transition-opacity group-hover:opacity-100">
+        {index + 1} / {Math.max(slideCount, 1)}
       </div>
     </div>
   );
@@ -374,17 +354,24 @@ export function PptxViewer({ path, title }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const viewerRef = useRef<AidenPptxViewer | null>(null);
   const bufferRef = useRef<ArrayBuffer | null>(null);
+  const [activePath, setActivePath] = useState(path);
   const [viewer, setViewer] = useState<AidenPptxViewer | null>(null);
   const [status, setStatus] = useState<PreviewStatus>("checking");
   const [stage, setStage] = useState("Checking file size...");
+  const [progress, setProgress] = useState<number | null>(null);
   const [fileSize, setFileSize] = useState<number | null>(null);
   const [forceOpen, setForceOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [slideCount, setSlideCount] = useState(0);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [presenting, setPresenting] = useState(false);
-  const assetUrl = useMemo(() => assetUrlFor(path), [path]);
-  const filename = path.split("/").pop() || title || "Presentation";
+  const assetUrl = useMemo(() => assetUrlFor(activePath), [activePath]);
+  const filename = activePath.split("/").pop() || title || "Presentation";
+
+  useEffect(() => {
+    setActivePath(path);
+    setForceOpen(false);
+  }, [path]);
 
   const goToSlide = useCallback((index: number) => {
     const clamped = Math.min(Math.max(index, 0), Math.max(slideCount - 1, 0));
@@ -408,13 +395,16 @@ export function PptxViewer({ path, title }: Props) {
     container.innerHTML = "";
     setStatus("checking");
     setStage("Checking file size...");
+    setProgress(null);
     setSlideCount(0);
     setCurrentSlide(0);
     setPresenting(false);
 
     void (async () => {
       try {
-        const size = await getAssetSize(assetUrl);
+        const loadPath = activePath;
+        const nextAssetUrl = assetUrlFor(loadPath);
+        const size = await getAssetSize(nextAssetUrl);
         if (cancelled) return;
         setFileSize(size);
 
@@ -425,10 +415,21 @@ export function PptxViewer({ path, title }: Props) {
 
         setStatus("loading");
         setStage("Downloading presentation...");
-        const response = await fetch(assetUrl);
-        if (!response.ok) throw new Error(`Failed to load file (${response.status})`);
-        const buffer = await response.arrayBuffer();
+        const buffer = await fetchAssetArrayBuffer(nextAssetUrl, (next) => {
+          if (!cancelled) setProgress(next.percent);
+        });
         if (cancelled) return;
+        if (isOleCompoundBuffer(buffer)) {
+          setStatus("converting");
+          setStage("Converting legacy PowerPoint file to PPTX...");
+          const converted = await convertLegacyOfficeFile(loadPath);
+          if (cancelled) return;
+          setActivePath(converted.path);
+          return;
+        }
+        if (!isZipBuffer(buffer)) {
+          throw new Error("This file is not a supported presentation");
+        }
         bufferRef.current = buffer;
 
         const loadedViewer = await loadAidenPptx(container, buffer, setStage, (index) => {
@@ -460,7 +461,7 @@ export function PptxViewer({ path, title }: Props) {
       bufferRef.current = null;
       container.innerHTML = "";
     };
-  }, [assetUrl, forceOpen]);
+  }, [activePath, forceOpen]);
 
   if (status === "legacy") {
     return <LegacyPptxViewer path={path} title={title} />;
@@ -469,7 +470,7 @@ export function PptxViewer({ path, title }: Props) {
   if (status === "prompt") {
     return (
       <OfficeLargeFilePrompt
-        path={path}
+        path={activePath}
         title={title}
         extLabel="PPTX"
         assetUrl={assetUrl}
@@ -487,7 +488,7 @@ export function PptxViewer({ path, title }: Props) {
   }
 
   const toolbar = (
-    <OfficeChrome path={path} title={title} extLabel="PPTX">
+    <OfficeChrome path={activePath} title={title} extLabel="PPTX">
       <ToolbarButton
         icon={PanelLeft}
         label="Slides"
@@ -565,8 +566,12 @@ export function PptxViewer({ path, title }: Props) {
               </aside>
             )}
             <div className="relative min-w-0 flex-1">
-              {(status === "checking" || status === "loading") && (
-                <OfficePreviewSkeleton stage={stage} variant="presentation" />
+              {(status === "checking" || status === "converting" || status === "loading") && (
+                <OfficePreviewSkeleton
+                  stage={stage}
+                  variant="presentation"
+                  progress={progress}
+                />
               )}
               <div
                 ref={containerRef}
@@ -581,7 +586,6 @@ export function PptxViewer({ path, title }: Props) {
           buffer={bufferRef.current}
           initialSlide={currentSlide}
           slideCount={slideCount}
-          title={title}
           onExit={() => setPresenting(false)}
           onSlideChange={(index) => {
             setCurrentSlide(index);

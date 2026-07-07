@@ -10,9 +10,11 @@ import { downloadAsset, formatFileSize } from "@/lib/office/browser-file";
 export function OfficePreviewSkeleton({
   stage,
   variant = "document",
+  progress,
 }: {
   stage: string;
   variant?: "document" | "spreadsheet" | "presentation";
+  progress?: number | null;
 }) {
   const body =
     variant === "spreadsheet" ? (
@@ -50,9 +52,22 @@ export function OfficePreviewSkeleton({
 
   return (
     <div className="absolute inset-0 z-10 flex flex-col bg-background/95">
-      <div className="flex shrink-0 items-center gap-2 border-b border-border bg-muted/30 px-3 py-1.5 text-[12px] text-muted-foreground">
-        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-        <span>{stage}</span>
+      <div className="shrink-0 border-b border-border bg-muted/30 px-3 py-1.5">
+        <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          <span className="min-w-0 flex-1 truncate">{stage}</span>
+          {typeof progress === "number" && (
+            <span className="tabular-nums text-foreground">{progress}%</span>
+          )}
+        </div>
+        {typeof progress === "number" && (
+          <div className="mt-1 h-1 overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-full rounded-full bg-primary transition-[width]"
+              style={{ width: `${Math.max(0, Math.min(100, progress))}%` }}
+            />
+          </div>
+        )}
       </div>
       {body}
     </div>

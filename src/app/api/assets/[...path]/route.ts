@@ -39,8 +39,10 @@ const MIME_TYPES: Record<string, string> = {
   ".txt": "text/plain",
   ".doc": "application/msword",
   ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ".xls": "application/vnd.ms-excel",
   ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   ".xlsm": "application/vnd.ms-excel.sheet.macroEnabled.12",
+  ".ppt": "application/vnd.ms-powerpoint",
   ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
   ".ipynb": "application/json",
 };
@@ -52,6 +54,16 @@ const MIME_TYPES: Record<string, string> = {
 const NO_CACHE_EXTS = new Set([
   ".html", ".tex", ".csv", ".md", ".markdown", ".txt",
   ".json", ".xml", ".yaml", ".yml", ".ipynb",
+]);
+
+const BINARY_WRITE_EXTS = new Set([
+  ".doc",
+  ".docx",
+  ".xls",
+  ".xlsx",
+  ".xlsm",
+  ".ppt",
+  ".pptx",
 ]);
 
 type RouteParams = { params: Promise<{ path: string[] }> };
@@ -244,8 +256,14 @@ export async function PUT(req: NextRequest, { params }: RouteParams) {
     const virtualPath = segments.join("/");
     await assertWritablePath(virtualPath);
     const resolved = resolveContentPath(virtualPath);
-    const body = await req.text();
-    await fs.writeFile(resolved, body, "utf-8");
+    const ext = path.extname(resolved).toLowerCase();
+    if (BINARY_WRITE_EXTS.has(ext)) {
+      const body = Buffer.from(await req.arrayBuffer());
+      await fs.writeFile(resolved, body);
+    } else {
+      const body = await req.text();
+      await fs.writeFile(resolved, body, "utf-8");
+    }
     autoCommit(virtualPath, "Update");
     return NextResponse.json({ ok: true });
   } catch (error) {
