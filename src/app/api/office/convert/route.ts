@@ -4,11 +4,13 @@ import os from "os";
 import path from "path";
 import { NextRequest, NextResponse } from "next/server";
 import { resolveContentPath } from "@/lib/storage/path-utils";
+import { invalidateTreeCache } from "@/lib/storage/tree-builder";
 
 const CONVERT_TIMEOUT_MS = 90_000;
 const OLE_MAGIC = Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]);
 
 type OfficeKind = "word" | "spreadsheet" | "presentation";
+type OfficeArchiveBucket = "doc" | "xls" | "ppt";
 
 const CONVERT_TARGETS: Record<
   OfficeKind,
@@ -23,6 +25,12 @@ const KIND_BY_LEGACY_EXT: Record<string, OfficeKind> = {
   ".doc": "word",
   ".xls": "spreadsheet",
   ".ppt": "presentation",
+};
+
+const ARCHIVE_BUCKET_BY_KIND: Record<OfficeKind, OfficeArchiveBucket> = {
+  word: "doc",
+  spreadsheet: "xls",
+  presentation: "ppt",
 };
 
 function libreOfficeCommand(): string {
@@ -118,6 +126,114 @@ function convertedFsPath(sourcePath: string, targetExt: string): string {
   return `${sourcePath}${targetExt}`;
 }
 
+function splitVirtualPath(virtualPath: string): string[] {
+  return virtualPath.split("/").filter(Boolean);
+}
+
+function isArchivedOriginalVirtualPath(virtualPath: string): boolean {
+  return splitVirtualPath(virtualPath).includes(".office-originals");
+}
+
+function archivedOriginalVirtualPath(virtualPath: string, kind: OfficeKind): string {
+  const parts = splitVirtualPath(virtualPath);
+  const cabinetRoot = parts.length > 1 ? parts[0] : "";
+  const relativeParts = parts.length > 1 ? parts.slice(1) : parts;
+  const fileName = relativeParts.at(-1);
+  if (!fileName) {
+    throw new Error("Source path does not include a file name");
+  }
+  return [
+    cabinetRoot,
+    ".office-originals",
+    ARCHIVE_BUCKET_BY_KIND[kind],
+    ...relativeParts.slice(0, -1),
+    fileName,
+  ]
+    .filter(Boolean)
+    .join("/");
+}
+
+async function pathExists(filePath: string): Promise<boolean> {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    const stat = await fs.stat(filePath);
+    return stat.isFile();
+  } catch {
+    return false;
+  }
+}
+
+async function uniqueArchivedPath(archivePath: string): Promise<string> {
+  if (!(await pathExists(archivePath))) {
+    return archivePath;
+  }
+
+  const dir = path.dirname(archivePath);
+  const ext = path.extname(archivePath);
+  const base = path.basename(archivePath, ext);
+  for (let i = 1; i < 10_000; i += 1) {
+    const candidate = path.join(dir, `${base}.${i}${ext}`);
+    if (!(await pathExists(candidate))) {
+      return candidate;
+    }
+  }
+  throw new Error("Unable to allocate archive path for original Office file");
+}
+
+async function archiveOriginalFile(sourcePath: string, virtualPath: string, kind: OfficeKind) {
+  if (isArchivedOriginalVirtualPath(virtualPath)) {
+    throw new Error("Archived Office originals cannot be archived again");
+  }
+
+  const archiveVirtualPath = archivedOriginalVirtualPath(virtualPath, kind);
+  const archivePath = await uniqueArchivedPath(resolveContentPath(archiveVirtualPath));
+  await fs.mkdir(path.dirname(archivePath), { recursive: true });
+  await fs.rename(sourcePath, archivePath);
+  return archivePath;
+}
+
+async function restoreArchivedOriginal(archivePath: string, sourcePath: string): Promise<void> {
+  if (await pathExists(sourcePath)) {
+    return;
+  }
+  await fs.mkdir(path.dirname(sourcePath), { recursive: true });
+  await fs.rename(archivePath, sourcePath);
+}
+
+async function writeConvertedFileAtomically(
+  tempOutputPath: string,
+  targetPath: string,
+  sourcePath: string,
+  virtualPath: string,
+  kind: OfficeKind
+): Promise<void> {
+  const tempTargetPath = path.join(
+    path.dirname(targetPath),
+    `.${path.basename(targetPath)}.cabinet-converting-${process.pid}-${Date.now()}`
+  );
+  let archivePath: string | null = null;
+
+  await fs.copyFile(tempOutputPath, tempTargetPath);
+  try {
+    archivePath = await archiveOriginalFile(sourcePath, virtualPath, kind);
+    await fs.rename(tempTargetPath, targetPath);
+  } catch (error) {
+    await fs.rm(tempTargetPath, { force: true }).catch(() => undefined);
+    if (archivePath) {
+      await restoreArchivedOriginal(archivePath, sourcePath).catch(() => undefined);
+    }
+    throw error;
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as { path?: unknown; kind?: unknown };
@@ -139,21 +255,22 @@ export async function POST(req: NextRequest) {
     const sourcePath = resolveContentPath(virtualPath);
     const targetPath = convertedFsPath(sourcePath, target.ext);
     const targetVirtualPath = convertedVirtualPath(virtualPath, target.ext);
+    const targetExists = await fileExists(targetPath);
 
+    let sourceStat: Awaited<ReturnType<typeof fs.stat>>;
     try {
-      const existing = await fs.stat(targetPath);
-      if (existing.isFile()) {
+      sourceStat = await fs.stat(sourcePath);
+    } catch {
+      if (targetExists) {
         return NextResponse.json({
           path: targetVirtualPath,
           alreadyExists: true,
           label: target.label,
         });
       }
-    } catch {
-      // Convert below.
+      return NextResponse.json({ error: "Source file was not found" }, { status: 404 });
     }
 
-    const sourceStat = await fs.stat(sourcePath);
     if (!sourceStat.isFile()) {
       return NextResponse.json({ error: "Source is not a file" }, { status: 400 });
     }
@@ -162,6 +279,22 @@ export async function POST(req: NextRequest) {
         { error: "Source is not a legacy binary Office file" },
         { status: 400 }
       );
+    }
+    if (targetExists) {
+      if (isArchivedOriginalVirtualPath(virtualPath)) {
+        return NextResponse.json({
+          path: targetVirtualPath,
+          alreadyExists: true,
+          label: target.label,
+        });
+      }
+      await archiveOriginalFile(sourcePath, virtualPath, kind);
+      invalidateTreeCache();
+      return NextResponse.json({
+        path: targetVirtualPath,
+        alreadyExists: true,
+        label: target.label,
+      });
     }
 
     const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "cabinet-office-"));
@@ -174,7 +307,7 @@ export async function POST(req: NextRequest) {
       if (!tempOutputStat.isFile()) {
         return NextResponse.json({ error: "Converted file was not created" }, { status: 500 });
       }
-      await fs.copyFile(tempOutputPath, targetPath);
+      await writeConvertedFileAtomically(tempOutputPath, targetPath, sourcePath, virtualPath, kind);
     } finally {
       await fs.rm(tempDir, { recursive: true, force: true });
     }
@@ -184,6 +317,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Converted file was not created" }, { status: 500 });
     }
 
+    invalidateTreeCache();
     return NextResponse.json({
       path: targetVirtualPath,
       alreadyExists: false,
