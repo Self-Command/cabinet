@@ -23,13 +23,10 @@ import { ToolbarButton } from "@/components/layout/toolbar-button";
 import { ViewerLayout } from "@/components/layout/viewer-layout";
 import { assetUrlFor } from "@/lib/cabinets/asset-url";
 import {
-  fetchAssetArrayBuffer,
   getAssetSize,
-  isOleCompoundBuffer,
-  isZipBuffer,
   OFFICE_LARGE_FILE_BYTES,
 } from "@/lib/office/browser-file";
-import { convertLegacyOfficeFile } from "@/lib/office/legacy-conversion";
+import { loadBrowserOfficeBuffer } from "@/lib/office/legacy-conversion";
 
 type PreviewStatus =
   | "checking"
@@ -102,22 +99,26 @@ export function SuperDocWordViewer({ path, title }: Props) {
 
         setStatus("loading");
         setStage("Downloading document...");
-        const buffer = await fetchAssetArrayBuffer(nextAssetUrl, (next) => {
-          if (!cancelled) setProgress(next.percent);
+        const loaded = await loadBrowserOfficeBuffer({
+          path: loadPath,
+          kind: "word",
+          assetUrl: nextAssetUrl,
+          onProgress: (next) => {
+            if (!cancelled) setProgress(next.percent);
+          },
+          onConvertStart: () => {
+            if (!cancelled) {
+              setStatus("converting");
+              setStage("Converting legacy Word file to DOCX...");
+            }
+          },
         });
         if (cancelled) return;
-        if (isOleCompoundBuffer(buffer)) {
-          setStatus("converting");
-          setStage("Converting legacy Word file to DOCX...");
-          const converted = await convertLegacyOfficeFile(loadPath);
-          if (cancelled) return;
-          setActivePath(converted.path);
+        if (loaded.type === "converted") {
+          setActivePath(loaded.path);
           return;
         }
-        if (!isZipBuffer(buffer)) {
-          throw new Error("This file is not a supported Word document");
-        }
-        const file = new File([buffer], filename.replace(/\.doc$/i, ".docx"), {
+        const file = new File([loaded.buffer], filename.replace(/\.doc$/i, ".docx"), {
           type: DOCX_MIME,
         });
         setStage("Mounting Word editor...");

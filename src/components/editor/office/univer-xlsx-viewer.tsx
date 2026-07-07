@@ -10,14 +10,11 @@ import { Button } from "@/components/ui/button";
 import { assetUrlFor } from "@/lib/cabinets/asset-url";
 import {
   downloadAsset,
-  fetchAssetArrayBuffer,
   formatFileSize,
   getAssetSize,
-  isOleCompoundBuffer,
-  isZipBuffer,
   OFFICE_LARGE_FILE_BYTES,
 } from "@/lib/office/browser-file";
-import { convertLegacyOfficeFile } from "@/lib/office/legacy-conversion";
+import { loadBrowserOfficeBuffer } from "@/lib/office/legacy-conversion";
 import { xlsxWorkbookToUniverData } from "@/lib/office/xlsx-to-univer";
 
 type UniverHandle = {
@@ -161,6 +158,8 @@ export function UniverXlsxViewer({ path, title }: Props) {
   const filename = activePath.split("/").pop() || title || "Spreadsheet";
 
   useEffect(() => {
+    // The viewer keeps a converted path in state; reset it when the selected file changes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setActivePath(path);
     setForceOpen(false);
   }, [path]);
@@ -173,6 +172,9 @@ export function UniverXlsxViewer({ path, title }: Props) {
     container.innerHTML = "";
     univerRef.current?.dispose?.();
     univerRef.current = null;
+    // Loading an Office file is an imperative renderer lifecycle; reset the state machine
+    // before the async fetch/parse/mount sequence starts.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setStatus("checking");
     setStage("Checking file size...");
     setProgress(null);
@@ -192,22 +194,26 @@ export function UniverXlsxViewer({ path, title }: Props) {
 
         setStatus("loading");
         setStage("Downloading workbook...");
-        const buffer = await fetchAssetArrayBuffer(nextAssetUrl, (next) => {
-          if (!cancelled) setProgress(next.percent);
+        const loaded = await loadBrowserOfficeBuffer({
+          path: loadPath,
+          kind: "spreadsheet",
+          assetUrl: nextAssetUrl,
+          onProgress: (next) => {
+            if (!cancelled) setProgress(next.percent);
+          },
+          onConvertStart: () => {
+            if (!cancelled) {
+              setStatus("converting");
+              setStage("Converting legacy Excel file to XLSX...");
+            }
+          },
         });
         if (cancelled) return;
-        if (isOleCompoundBuffer(buffer)) {
-          setStatus("converting");
-          setStage("Converting legacy Excel file to XLSX...");
-          const converted = await convertLegacyOfficeFile(loadPath);
-          if (cancelled) return;
-          setActivePath(converted.path);
+        if (loaded.type === "converted") {
+          setActivePath(loaded.path);
           return;
         }
-        if (!isZipBuffer(buffer)) {
-          throw new Error("This file is not a supported spreadsheet");
-        }
-        univerRef.current = await loadUniverSheet(container, buffer, filename, setStage);
+        univerRef.current = await loadUniverSheet(container, loaded.buffer, filename, setStage);
         if (!cancelled) setStatus("ready");
       } catch {
         if (!cancelled) setStatus("legacy");

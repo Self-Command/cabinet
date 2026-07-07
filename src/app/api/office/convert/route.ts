@@ -1,5 +1,6 @@
 import { spawn } from "child_process";
 import fs from "fs/promises";
+import os from "os";
 import path from "path";
 import { NextRequest, NextResponse } from "next/server";
 import { resolveContentPath } from "@/lib/storage/path-utils";
@@ -7,10 +8,21 @@ import { resolveContentPath } from "@/lib/storage/path-utils";
 const CONVERT_TIMEOUT_MS = 90_000;
 const OLE_MAGIC = Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]);
 
-const CONVERT_TARGETS: Record<string, { format: string; ext: string; label: string }> = {
-  ".doc": { format: "docx", ext: ".docx", label: "Word" },
-  ".xls": { format: "xlsx", ext: ".xlsx", label: "Excel" },
-  ".ppt": { format: "pptx", ext: ".pptx", label: "PowerPoint" },
+type OfficeKind = "word" | "spreadsheet" | "presentation";
+
+const CONVERT_TARGETS: Record<
+  OfficeKind,
+  { format: string; ext: string; legacyExt: string; label: string }
+> = {
+  word: { format: "docx", ext: ".docx", legacyExt: ".doc", label: "Word" },
+  spreadsheet: { format: "xlsx", ext: ".xlsx", legacyExt: ".xls", label: "Excel" },
+  presentation: { format: "pptx", ext: ".pptx", legacyExt: ".ppt", label: "PowerPoint" },
+};
+
+const KIND_BY_LEGACY_EXT: Record<string, OfficeKind> = {
+  ".doc": "word",
+  ".xls": "spreadsheet",
+  ".ppt": "presentation",
 };
 
 function libreOfficeCommand(): string {
@@ -77,9 +89,38 @@ function runLibreOfficeConvert(
   });
 }
 
+function parseOfficeKind(value: unknown, sourceExt: string): OfficeKind | null {
+  if (value === "word" || value === "spreadsheet" || value === "presentation") {
+    return value;
+  }
+  return KIND_BY_LEGACY_EXT[sourceExt] ?? null;
+}
+
+function convertedVirtualPath(virtualPath: string, targetExt: string): string {
+  const ext = path.posix.extname(virtualPath);
+  if (ext.toLowerCase() === targetExt) {
+    return `${virtualPath.slice(0, -ext.length)}.converted${targetExt}`;
+  }
+  if (ext) {
+    return `${virtualPath.slice(0, -ext.length)}${targetExt}`;
+  }
+  return `${virtualPath}${targetExt}`;
+}
+
+function convertedFsPath(sourcePath: string, targetExt: string): string {
+  const ext = path.extname(sourcePath);
+  if (ext.toLowerCase() === targetExt) {
+    return `${sourcePath.slice(0, -ext.length)}.converted${targetExt}`;
+  }
+  if (ext) {
+    return `${sourcePath.slice(0, -ext.length)}${targetExt}`;
+  }
+  return `${sourcePath}${targetExt}`;
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const body = (await req.json()) as { path?: unknown };
+    const body = (await req.json()) as { path?: unknown; kind?: unknown };
     const virtualPath = typeof body.path === "string" ? body.path : "";
     if (!virtualPath || virtualPath.startsWith("gdrive:")) {
       return NextResponse.json(
@@ -89,14 +130,15 @@ export async function POST(req: NextRequest) {
     }
 
     const sourceExt = path.extname(virtualPath).toLowerCase();
-    const target = CONVERT_TARGETS[sourceExt];
-    if (!target) {
+    const kind = parseOfficeKind(body.kind, sourceExt);
+    if (!kind) {
       return NextResponse.json({ error: "Unsupported Office conversion type" }, { status: 400 });
     }
+    const target = CONVERT_TARGETS[kind];
 
     const sourcePath = resolveContentPath(virtualPath);
-    const targetPath = sourcePath.slice(0, -sourceExt.length) + target.ext;
-    const targetVirtualPath = virtualPath.slice(0, -sourceExt.length) + target.ext;
+    const targetPath = convertedFsPath(sourcePath, target.ext);
+    const targetVirtualPath = convertedVirtualPath(virtualPath, target.ext);
 
     try {
       const existing = await fs.stat(targetPath);
@@ -122,7 +164,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    await runLibreOfficeConvert(sourcePath, path.dirname(sourcePath), target.format);
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "cabinet-office-"));
+    try {
+      const tempInputPath = path.join(tempDir, `source${target.legacyExt}`);
+      const tempOutputPath = path.join(tempDir, `source${target.ext}`);
+      await fs.copyFile(sourcePath, tempInputPath);
+      await runLibreOfficeConvert(tempInputPath, tempDir, target.format);
+      const tempOutputStat = await fs.stat(tempOutputPath);
+      if (!tempOutputStat.isFile()) {
+        return NextResponse.json({ error: "Converted file was not created" }, { status: 500 });
+      }
+      await fs.copyFile(tempOutputPath, targetPath);
+    } finally {
+      await fs.rm(tempDir, { recursive: true, force: true });
+    }
 
     const convertedStat = await fs.stat(targetPath);
     if (!convertedStat.isFile()) {

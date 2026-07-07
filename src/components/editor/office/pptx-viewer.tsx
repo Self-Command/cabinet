@@ -19,13 +19,10 @@ import { ViewerLayout } from "@/components/layout/viewer-layout";
 import { ToolbarButton } from "@/components/layout/toolbar-button";
 import { assetUrlFor } from "@/lib/cabinets/asset-url";
 import {
-  fetchAssetArrayBuffer,
   getAssetSize,
-  isOleCompoundBuffer,
-  isZipBuffer,
   OFFICE_LARGE_FILE_BYTES,
 } from "@/lib/office/browser-file";
-import { convertLegacyOfficeFile } from "@/lib/office/legacy-conversion";
+import { loadBrowserOfficeBuffer } from "@/lib/office/legacy-conversion";
 import { cn } from "@/lib/utils";
 
 type PreviewStatus = "checking" | "converting" | "prompt" | "loading" | "ready" | "legacy";
@@ -354,6 +351,7 @@ export function PptxViewer({ path, title }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const viewerRef = useRef<AidenPptxViewer | null>(null);
   const bufferRef = useRef<ArrayBuffer | null>(null);
+  const [presentationBuffer, setPresentationBuffer] = useState<ArrayBuffer | null>(null);
   const [activePath, setActivePath] = useState(path);
   const [viewer, setViewer] = useState<AidenPptxViewer | null>(null);
   const [status, setStatus] = useState<PreviewStatus>("checking");
@@ -369,6 +367,8 @@ export function PptxViewer({ path, title }: Props) {
   const filename = activePath.split("/").pop() || title || "Presentation";
 
   useEffect(() => {
+    // The viewer keeps a converted path in state; reset it when the selected file changes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setActivePath(path);
     setForceOpen(false);
   }, [path]);
@@ -390,8 +390,12 @@ export function PptxViewer({ path, title }: Props) {
       // ignore cleanup errors from the renderer
     }
     viewerRef.current = null;
+    // The PPT renderer is an imperative browser engine; clear mounted state before
+    // starting the async fetch/parse/render lifecycle.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setViewer(null);
     bufferRef.current = null;
+    setPresentationBuffer(null);
     container.innerHTML = "";
     setStatus("checking");
     setStage("Checking file size...");
@@ -415,22 +419,28 @@ export function PptxViewer({ path, title }: Props) {
 
         setStatus("loading");
         setStage("Downloading presentation...");
-        const buffer = await fetchAssetArrayBuffer(nextAssetUrl, (next) => {
-          if (!cancelled) setProgress(next.percent);
+        const loaded = await loadBrowserOfficeBuffer({
+          path: loadPath,
+          kind: "presentation",
+          assetUrl: nextAssetUrl,
+          onProgress: (next) => {
+            if (!cancelled) setProgress(next.percent);
+          },
+          onConvertStart: () => {
+            if (!cancelled) {
+              setStatus("converting");
+              setStage("Converting legacy PowerPoint file to PPTX...");
+            }
+          },
         });
         if (cancelled) return;
-        if (isOleCompoundBuffer(buffer)) {
-          setStatus("converting");
-          setStage("Converting legacy PowerPoint file to PPTX...");
-          const converted = await convertLegacyOfficeFile(loadPath);
-          if (cancelled) return;
-          setActivePath(converted.path);
+        if (loaded.type === "converted") {
+          setActivePath(loaded.path);
           return;
         }
-        if (!isZipBuffer(buffer)) {
-          throw new Error("This file is not a supported presentation");
-        }
+        const buffer = loaded.buffer;
         bufferRef.current = buffer;
+        setPresentationBuffer(buffer);
 
         const loadedViewer = await loadAidenPptx(container, buffer, setStage, (index) => {
           setCurrentSlide(Math.max(0, index));
@@ -459,6 +469,7 @@ export function PptxViewer({ path, title }: Props) {
       viewerRef.current = null;
       setViewer(null);
       bufferRef.current = null;
+      setPresentationBuffer(null);
       container.innerHTML = "";
     };
   }, [activePath, forceOpen]);
@@ -517,14 +528,14 @@ export function PptxViewer({ path, title }: Props) {
         icon={Play}
         label="Play"
         iconOnly
-        disabled={status !== "ready" || !bufferRef.current}
+        disabled={status !== "ready" || !presentationBuffer}
         onClick={() => setPresenting(true)}
       />
       <ToolbarButton
         icon={Maximize2}
         label="Fullscreen"
         iconOnly
-        disabled={status !== "ready" || !bufferRef.current}
+        disabled={status !== "ready" || !presentationBuffer}
         onClick={() => setPresenting(true)}
       />
     </OfficeChrome>
@@ -581,9 +592,9 @@ export function PptxViewer({ path, title }: Props) {
           </div>
         </div>
       </ViewerLayout>
-      {presenting && bufferRef.current && (
+      {presenting && presentationBuffer && (
         <PresentationOverlay
-          buffer={bufferRef.current}
+          buffer={presentationBuffer}
           initialSlide={currentSlide}
           slideCount={slideCount}
           onExit={() => setPresenting(false)}
