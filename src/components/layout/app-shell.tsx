@@ -250,7 +250,7 @@ export function AppShell() {
   });
 
   const loadProviders = useAppStore((s) => s.loadProviders);
-  const [useUniverOfficePreview, setUseUniverOfficePreview] = useState(false);
+  const [useUniverOfficePreview, setUseUniverOfficePreview] = useState(true);
 
   // Audit #017: page tab title should use the human title from frontmatter
   // when present, falling back to the slug. Read from the editor store so the
@@ -343,10 +343,10 @@ export function AppShell() {
   useEffect(() => {
     try {
       setUseUniverOfficePreview(
-        window.localStorage.getItem(UNIVER_OFFICE_STORAGE_KEY) === "1"
+        window.localStorage.getItem(UNIVER_OFFICE_STORAGE_KEY) !== "0"
       );
     } catch {
-      setUseUniverOfficePreview(false);
+      setUseUniverOfficePreview(true);
     }
   }, []);
 

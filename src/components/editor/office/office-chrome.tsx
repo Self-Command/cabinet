@@ -5,6 +5,7 @@ import { ViewerToolbar } from "@/components/layout/viewer-toolbar";
 import { ToolbarButton } from "@/components/layout/toolbar-button";
 import { useLocale } from "@/i18n/use-locale";
 import { assetUrlFor } from "@/lib/cabinets/asset-url";
+import { downloadAsset } from "@/lib/office/browser-file";
 
 interface OfficeChromeProps {
   path: string;
@@ -57,10 +58,7 @@ export function OfficeChrome({ path, extLabel, external, hideFinder }: OfficeChr
           label="Download"
           title={t("officeChrome:downloadOriginal")}
           onClick={() => {
-            const a = document.createElement("a");
-            a.href = assetUrl;
-            a.download = filename;
-            a.click();
+            downloadAsset(assetUrl, filename);
           }}
         />
       )}
