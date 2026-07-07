@@ -5,6 +5,7 @@ import { OfficeChrome } from "./office-chrome";
 import { ViewerLayout } from "@/components/layout/viewer-layout";
 import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { assetUrlFor } from "@/lib/cabinets/asset-url";
 
 interface Props {
   path: string;
@@ -21,6 +22,7 @@ export function XlsxViewer({ path, title }: Props) {
   const [active, setActive] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const assetUrl = assetUrlFor(path);
 
   useEffect(() => {
     let cancelled = false;
@@ -31,7 +33,7 @@ export function XlsxViewer({ path, title }: Props) {
       try {
         const [XLSX, res] = await Promise.all([
           import("xlsx"),
-          fetch(`/api/assets/${path}`),
+          fetch(assetUrl),
         ]);
         if (cancelled) return;
         if (!res.ok) throw new Error(`Failed to load file (${res.status})`);
@@ -56,7 +58,7 @@ export function XlsxViewer({ path, title }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [path]);
+  }, [assetUrl]);
 
   const current = useMemo(() => sheets?.[active] ?? null, [sheets, active]);
 

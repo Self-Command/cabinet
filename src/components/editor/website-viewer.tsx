@@ -5,6 +5,7 @@ import { ViewerToolbar } from "@/components/layout/viewer-toolbar";
 import { ViewerLayout } from "@/components/layout/viewer-layout";
 import { ToolbarButton } from "@/components/layout/toolbar-button";
 import { useLocale } from "@/i18n/use-locale";
+import { assetUrlFor } from "@/lib/cabinets/asset-url";
 
 interface WebsiteViewerProps {
   path: string;
@@ -15,7 +16,7 @@ interface WebsiteViewerProps {
 
 export function WebsiteViewer({ path, title, fullscreen, onExit }: WebsiteViewerProps) {
   const { t } = useLocale();
-  const iframeSrc = `/api/assets/${path}/index.html`;
+  const iframeSrc = `${assetUrlFor(path)}/index.html`;
   const exitButton =
     fullscreen && onExit ? (
       <ToolbarButton

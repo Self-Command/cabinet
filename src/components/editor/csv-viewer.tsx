@@ -6,6 +6,7 @@ import { ViewerToolbar } from "@/components/layout/viewer-toolbar";
 import { ViewerLayout } from "@/components/layout/viewer-layout";
 import { ToolbarButton } from "@/components/layout/toolbar-button";
 import { useLocale } from "@/i18n/use-locale";
+import { assetUrlFor } from "@/lib/cabinets/asset-url";
 
 interface CsvViewerProps {
   path: string;
@@ -78,7 +79,7 @@ export function CsvViewer({ path }: CsvViewerProps) {
   const [saving, setSaving] = useState(false);
   const [editCell, setEditCell] = useState<{ r: number; c: number } | null>(null);
 
-  const csvUrl = `/api/assets/${path}`;
+  const csvUrl = assetUrlFor(path);
 
   useEffect(() => {
     fetch(csvUrl)
@@ -125,7 +126,7 @@ export function CsvViewer({ path }: CsvViewerProps) {
     setSaving(true);
     const csv = sourceMode ? rawText : rowsToCsv(rows);
     try {
-      await fetch(`/api/assets/${path}`, {
+      await fetch(csvUrl, {
         method: "PUT",
         headers: { "Content-Type": "text/plain" },
         body: csv,

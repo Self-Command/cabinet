@@ -4,6 +4,7 @@ import { ExternalLink, Download } from "lucide-react";
 import { ViewerToolbar } from "@/components/layout/viewer-toolbar";
 import { ViewerLayout } from "@/components/layout/viewer-layout";
 import { ToolbarButton } from "@/components/layout/toolbar-button";
+import { assetUrlFor } from "@/lib/cabinets/asset-url";
 
 interface MediaViewerProps {
   path: string;
@@ -12,7 +13,7 @@ interface MediaViewerProps {
 }
 
 export function MediaViewer({ path, type }: MediaViewerProps) {
-  const src = `/api/assets/${path}`;
+  const src = assetUrlFor(path);
   const filename = path.split("/").pop() || path;
   const ext = filename.includes(".") ? filename.split(".").pop()!.toUpperCase() : type.toUpperCase();
 

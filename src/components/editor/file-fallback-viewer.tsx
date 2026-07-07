@@ -4,6 +4,7 @@ import { File, FolderOpen, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ViewerToolbar } from "@/components/layout/viewer-toolbar";
 import { ViewerLayout } from "@/components/layout/viewer-layout";
+import { assetUrlFor } from "@/lib/cabinets/asset-url";
 
 interface FileFallbackViewerProps {
   path: string;
@@ -11,7 +12,7 @@ interface FileFallbackViewerProps {
 }
 
 export function FileFallbackViewer({ path }: FileFallbackViewerProps) {
-  const assetUrl = `/api/assets/${path}`;
+  const assetUrl = assetUrlFor(path);
   const filename = path.split("/").pop() || path;
   const ext = filename.includes(".") ? filename.split(".").pop()!.toUpperCase() : "";
 

@@ -16,6 +16,7 @@ import {
   setHtmlViewMode,
   type HtmlViewModeDetail,
 } from "@/lib/ui/html-view-mode";
+import { assetUrlFor } from "@/lib/cabinets/asset-url";
 
 interface SourceViewerProps {
   path: string;
@@ -58,7 +59,7 @@ export function SourceViewer({ path }: SourceViewerProps) {
   const [wrap, setWrap] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const assetUrl = `/api/assets/${path}`;
+  const assetUrl = assetUrlFor(path);
   const filename = path.split("/").pop() || path;
   const language = detectLanguage(filename);
 

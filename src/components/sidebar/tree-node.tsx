@@ -407,7 +407,7 @@ function TreeNodeImpl({
 
     // While browsing, clicking a tree row keeps you in browse mode and loads
     // that file's in-app browser URL rather than dropping back to the editor.
-    const assetUrl = `/api/assets/${node.path.split("/").map(encodeURIComponent).join("/")}`;
+    const assetUrl = assetUrlFor(node.path);
     const browseFileUrl =
       node.type === "website" || node.type === "app"
         ? `${assetUrl}/index.html`

@@ -6,6 +6,7 @@ import { ToolbarButton } from "@/components/layout/toolbar-button";
 import { ViewerToolbar } from "@/components/layout/viewer-toolbar";
 import { ViewerLayout } from "@/components/layout/viewer-layout";
 import { renderLatexToHtml } from "./latex-render";
+import { assetUrlFor } from "@/lib/cabinets/asset-url";
 
 interface LatexViewerProps {
   path: string;
@@ -31,7 +32,7 @@ export function LatexViewer({ path }: LatexViewerProps) {
 
   const rendered = useMemo(() => (content ? renderLatexToHtml(content) : null), [content]);
 
-  const assetUrl = `/api/assets/${path.split("/").map(encodeURIComponent).join("/")}`;
+  const assetUrl = assetUrlFor(path);
   const filename = path.split("/").pop() || path;
 
   const fetchContent = useCallback(async () => {

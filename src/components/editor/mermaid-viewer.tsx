@@ -7,6 +7,7 @@ import { ViewerToolbar } from "@/components/layout/viewer-toolbar";
 import { ViewerLayout } from "@/components/layout/viewer-layout";
 import { ToolbarButton } from "@/components/layout/toolbar-button";
 import { useLocale } from "@/i18n/use-locale";
+import { assetUrlFor } from "@/lib/cabinets/asset-url";
 
 interface MermaidViewerProps {
   path: string;
@@ -66,7 +67,7 @@ export function MermaidViewer({ path, title }: MermaidViewerProps) {
     setIsPanning(false);
   }, []);
 
-  const assetUrl = `/api/assets/${path}`;
+  const assetUrl = assetUrlFor(path);
   const filename = path.split("/").pop() || path;
 
   const fetchAndRender = useCallback(async () => {

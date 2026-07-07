@@ -33,6 +33,7 @@ import React, {
 } from "react";
 import { FileText, Code, Eye, Loader2, AlertCircle } from "lucide-react";
 import { useEditorStore } from "@/stores/editor-store";
+import { assetUrlFor } from "@/lib/cabinets/asset-url";
 
 /* -------------------------------------------------------------------------- */
 /*  Types                                                                      */
@@ -92,7 +93,7 @@ async function readTexFile(virtualPath: string): Promise<string> {
     throw new Error(result.error || "Failed to read file");
   }
   // Fallback: use the /api/assets endpoint
-  const res = await fetch(`/api/assets/${virtualPath}`);
+  const res = await fetch(assetUrlFor(virtualPath));
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.text();
 }
@@ -105,7 +106,7 @@ async function writeTexFile(virtualPath: string, content: string): Promise<void>
     return;
   }
   // Fallback: PUT to /api/assets
-  const res = await fetch(`/api/assets/${virtualPath}`, {
+  const res = await fetch(assetUrlFor(virtualPath), {
     method: "PUT",
     headers: { "Content-Type": "text/plain" },
     body: content,

@@ -4,6 +4,7 @@ import { ExternalLink } from "lucide-react";
 import { ViewerToolbar } from "@/components/layout/viewer-toolbar";
 import { ViewerLayout } from "@/components/layout/viewer-layout";
 import { ToolbarButton } from "@/components/layout/toolbar-button";
+import { assetUrlFor } from "@/lib/cabinets/asset-url";
 
 interface PdfViewerProps {
   path: string;
@@ -11,7 +12,7 @@ interface PdfViewerProps {
 }
 
 export function PdfViewer({ path, title }: PdfViewerProps) {
-  const pdfSrc = `/api/assets/${path}`;
+  const pdfSrc = assetUrlFor(path);
 
   return (
     <ViewerLayout

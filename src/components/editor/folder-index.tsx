@@ -18,6 +18,7 @@ import type { TreeNode } from "@/types";
 import { useTreeStore } from "@/stores/tree-store";
 import { useEditorStore } from "@/stores/editor-store";
 import { useLocale } from "@/i18n/use-locale";
+import { assetUrlFor } from "@/lib/cabinets/asset-url";
 
 type ViewMode = "list" | "gallery";
 
@@ -218,7 +219,7 @@ export function FolderIndex({ folderPath, entries }: FolderIndexProps) {
                   <div className="aspect-square w-full overflow-hidden rounded-md border border-border bg-muted">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                      src={`/api/assets/${child.path.split("/").map(encodeURIComponent).join("/")}`}
+                      src={assetUrlFor(child.path)}
                       alt={title}
                       loading="lazy"
                       className="h-full w-full object-cover transition-transform group-hover:scale-[1.02]"

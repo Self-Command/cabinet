@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { OfficeChrome } from "./office-chrome";
 import { ViewerLayout } from "@/components/layout/viewer-layout";
 import { Loader2 } from "lucide-react";
+import { assetUrlFor } from "@/lib/cabinets/asset-url";
 
 interface Props {
   path: string;
@@ -14,6 +15,7 @@ export function DocxViewer({ path, title }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const assetUrl = assetUrlFor(path);
 
   useEffect(() => {
     let cancelled = false;
@@ -29,7 +31,7 @@ export function DocxViewer({ path, title }: Props) {
       try {
         const [{ renderAsync }, res] = await Promise.all([
           import("docx-preview"),
-          fetch(`/api/assets/${path}`),
+          fetch(assetUrl),
         ]);
         if (cancelled) return;
         if (!res.ok) throw new Error(`Failed to load file (${res.status})`);
@@ -59,7 +61,7 @@ export function DocxViewer({ path, title }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [path]);
+  }, [assetUrl]);
 
   return (
     <ViewerLayout toolbar={<OfficeChrome path={path} title={title} extLabel="DOCX" />}>

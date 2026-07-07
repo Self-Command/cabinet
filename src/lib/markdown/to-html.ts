@@ -4,6 +4,7 @@ import remarkGfm from "remark-gfm";
 import remarkRehype from "remark-rehype";
 import rehypeStringify from "rehype-stringify";
 import { detectEmbed } from "@/lib/embeds/detect";
+import { assetUrlForPossiblyEncodedPath } from "@/lib/cabinets/asset-url";
 import { wikiLinkHrefForPageName } from "@/lib/markdown/internal-link-target";
 import { addHeadingIds } from "@/lib/markdown/heading-slug";
 
@@ -116,7 +117,7 @@ function addListAutoDir(html: string): string {
 function upgradeProviderVideos(html: string): string {
   return html.replace(
     /<video\b([^>]*)\bsrc="([^"]+)"([^>]*)><\/video>/gi,
-    (match, before: string, src: string, after: string) => {
+    (match, before: string, src: string) => {
       const detected = detectEmbed(src);
       if (!detected || detected.provider === "video") return match;
 
@@ -144,20 +145,22 @@ function upgradeProviderVideos(html: string): string {
  */
 function resolveRelativeUrls(html: string, pagePath: string): string {
   const dirPath = pagePath;
+  const assetUrlForRelative = (file: string) =>
+    assetUrlForPossiblyEncodedPath([dirPath, file].filter(Boolean).join("/"));
 
   html = html.replace(
     /href="\.\/([^"]+)"/g,
-    (_match, file: string) => `href="/api/assets/${dirPath}/${file}"`
+    (_match, file: string) => `href="${assetUrlForRelative(file)}"`
   );
 
   html = html.replace(
     /src="\.\/([^"]+)"/g,
-    (_match, file: string) => `src="/api/assets/${dirPath}/${file}"`
+    (_match, file: string) => `src="${assetUrlForRelative(file)}"`
   );
 
   html = html.replace(
     /data-src="\.\/([^"]+)"/g,
-    (_match, file: string) => `data-src="/api/assets/${dirPath}/${file}"`
+    (_match, file: string) => `data-src="${assetUrlForRelative(file)}"`
   );
 
   // Agents routinely write bare relative refs (`![x](image.jpg)`, no `./`).
@@ -168,7 +171,7 @@ function resolveRelativeUrls(html: string, pagePath: string): string {
   // usually a page-to-page link, not an asset.
   html = html.replace(
     /(?<![\w-])(src|data-src)="(?![a-z][a-z0-9+.-]*:)(?![/#?])([^"]+)"/gi,
-    (_match, attr: string, file: string) => `${attr}="/api/assets/${dirPath}/${file}"`
+    (_match, attr: string, file: string) => `${attr}="${assetUrlForRelative(file)}"`
   );
 
   // Mark PDF links with a data attribute so the editor can handle them

@@ -5,6 +5,22 @@ export function assetUrlFor(path: string): string {
   return `/api/assets/${path.split("/").map(encodeURIComponent).join("/")}`;
 }
 
+function safeDecodeUriComponent(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+/**
+ * Like assetUrlFor, but accepts paths that may already contain percent-encoded
+ * segments from the markdown/HTML pipeline.
+ */
+export function assetUrlForPossiblyEncodedPath(path: string): string {
+  return assetUrlFor(path.split("/").map(safeDecodeUriComponent).join("/"));
+}
+
 /**
  * The URL that serves a node's *content* — markdown for pages, index.html for
  * bundled websites/apps, the raw asset for everything else. Mirrors the routing

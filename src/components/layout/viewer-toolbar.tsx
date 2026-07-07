@@ -12,6 +12,7 @@ import { useAppStore } from "@/stores/app-store";
 import { useTreeStore } from "@/stores/tree-store";
 import { useLocale } from "@/i18n/use-locale";
 import { findNodeByPath } from "@/lib/cabinets/tree";
+import { assetUrlFor } from "@/lib/cabinets/asset-url";
 import { cn } from "@/lib/utils";
 
 /**
@@ -61,7 +62,7 @@ export function ViewerToolbar({
   // everything else the raw asset.
   const browseModeUrl = useMemo(() => {
     if (!sourcePath) return null;
-    const assetUrl = `/api/assets/${sourcePath.split("/").map(encodeURIComponent).join("/")}`;
+    const assetUrl = assetUrlFor(sourcePath);
     const lower = sourcePath.toLowerCase();
     if (sourceNode?.type === "website" || sourceNode?.type === "app") {
       return `${assetUrl}/index.html`;

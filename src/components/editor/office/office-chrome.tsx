@@ -4,6 +4,7 @@ import { Download, FolderOpen, ExternalLink } from "lucide-react";
 import { ViewerToolbar } from "@/components/layout/viewer-toolbar";
 import { ToolbarButton } from "@/components/layout/toolbar-button";
 import { useLocale } from "@/i18n/use-locale";
+import { assetUrlFor } from "@/lib/cabinets/asset-url";
 
 interface OfficeChromeProps {
   path: string;
@@ -17,7 +18,7 @@ interface OfficeChromeProps {
 
 export function OfficeChrome({ path, extLabel, external, hideFinder }: OfficeChromeProps) {
   const { t } = useLocale();
-  const assetUrl = `/api/assets/${path}`;
+  const assetUrl = assetUrlFor(path);
   const filename = path.split("/").pop() || path;
 
   const revealInFinder = async () => {

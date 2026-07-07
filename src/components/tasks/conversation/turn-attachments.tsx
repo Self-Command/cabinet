@@ -8,14 +8,7 @@ import {
   FileCode,
   FileImage,
 } from "lucide-react";
-
-function encodeVirtualPath(path: string): string {
-  return path
-    .split("/")
-    .filter(Boolean)
-    .map(encodeURIComponent)
-    .join("/");
-}
+import { assetUrlFor } from "@/lib/cabinets/asset-url";
 
 function filenameOf(path: string): string {
   const parts = path.split("/").filter(Boolean);
@@ -61,7 +54,7 @@ export function TurnAttachments({ paths }: TurnAttachmentsProps) {
     <div className="mt-3 flex flex-wrap gap-2">
       {paths.map((virtualPath) => {
         const name = filenameOf(virtualPath);
-        const assetUrl = `/api/assets/${encodeVirtualPath(virtualPath)}`;
+        const assetUrl = assetUrlFor(virtualPath);
         if (isImagePath(virtualPath)) {
           return (
             <a

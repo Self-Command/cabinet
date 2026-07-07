@@ -9,6 +9,7 @@ import { common, createLowlight } from "lowlight";
 import { toHtml } from "hast-util-to-html";
 import { markdownToHtml } from "@/lib/markdown/to-html";
 import { useLocale } from "@/i18n/use-locale";
+import { assetUrlFor } from "@/lib/cabinets/asset-url";
 
 interface NotebookViewerProps {
   path: string;
@@ -228,7 +229,7 @@ export function NotebookViewer({ path }: NotebookViewerProps) {
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  const assetUrl = `/api/assets/${path}`;
+  const assetUrl = assetUrlFor(path);
   const filename = path.split("/").pop() || path;
 
   const fetchNotebook = useCallback(async () => {
