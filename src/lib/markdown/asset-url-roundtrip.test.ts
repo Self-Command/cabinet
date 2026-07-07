@@ -24,3 +24,38 @@ test("markdown dot-relative image URLs with encoded segments are not double enco
   assert.ok(html.includes(expected));
   assert.doesNotMatch(html, /%25E5/);
 });
+
+test("markdown bare relative image URLs may include spaces and Chinese filenames", async () => {
+  const html = await markdownToHtml(
+    "![x](assets/github \u5feb\u901fpush\u6307\u5357/\u590d\u5236 GitHub \u4ed3\u5e93\u94fe\u63a5.webp)",
+    pagePath
+  );
+  assert.match(html, /<img /);
+  assert.ok(
+    html.includes(
+      'src="/api/assets/%E6%94%B6%E4%BB%B6%E7%AE%B1/%E9%A1%B5%E9%9D%A2/assets/github%20%E5%BF%AB%E9%80%9Fpush%E6%8C%87%E5%8D%97/%E5%A4%8D%E5%88%B6%20GitHub%20%E4%BB%93%E5%BA%93%E9%93%BE%E6%8E%A5.webp"'
+    )
+  );
+});
+
+test("markdown angle-bracket image URLs with spaces remain supported", async () => {
+  const html = await markdownToHtml(
+    "![x](<assets/github \u5feb\u901fpush\u6307\u5357/IMG-20260423214446955.webp>)",
+    pagePath
+  );
+  assert.match(html, /<img /);
+  assert.ok(
+    html.includes(
+      'src="/api/assets/%E6%94%B6%E4%BB%B6%E7%AE%B1/%E9%A1%B5%E9%9D%A2/assets/github%20%E5%BF%AB%E9%80%9Fpush%E6%8C%87%E5%8D%97/IMG-20260423214446955.webp"'
+    )
+  );
+});
+
+test("markdown non-image links with spaces are left for the link resolver", async () => {
+  const html = await markdownToHtml(
+    "[x](assets/github \u5feb\u901fpush\u6307\u5357/page.md)",
+    pagePath
+  );
+  assert.doesNotMatch(html, /<img /);
+  assert.doesNotMatch(html, /\/api\/assets\//);
+});

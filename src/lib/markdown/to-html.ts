@@ -63,6 +63,34 @@ function encodeFileUrls(markdown: string): string {
   );
 }
 
+const LOCAL_IMAGE_EXT_RE = /\.(?:png|jpe?g|gif|webp|svg|avif|bmp)(?:[#?][^\s)]*)?$/i;
+
+function isRelativeImageDestination(value: string): boolean {
+  const trimmed = value.trim();
+  if (!LOCAL_IMAGE_EXT_RE.test(trimmed)) return false;
+  if (trimmed.startsWith("/") || trimmed.startsWith("#") || trimmed.startsWith("?")) return false;
+  if (trimmed.startsWith("//")) return false;
+  return !/^[a-z][a-z0-9+.-]*:/i.test(trimmed);
+}
+
+/**
+ * CommonMark requires `<...>` around link/image destinations containing spaces.
+ * AI-generated Markdown often emits bare local image paths instead, e.g.
+ * `![](assets/github 快速push指南/图.webp)`. Encode only local image
+ * destinations so remark can parse them, then the asset URL rewriter handles
+ * Chinese path segments and already-encoded pieces centrally.
+ */
+function encodeBareRelativeImageDestinationSpaces(markdown: string): string {
+  return markdown.replace(
+    /(!\[[^\]\n]*\]\()([^)<>\n]+)(\))/g,
+    (_match, prefix: string, rawDestination: string, suffix: string) => {
+      if (!/[ \t]/.test(rawDestination)) return `${prefix}${rawDestination}${suffix}`;
+      if (!isRelativeImageDestination(rawDestination)) return `${prefix}${rawDestination}${suffix}`;
+      return `${prefix}${rawDestination.replace(/[ \t]/g, "%20")}${suffix}`;
+    }
+  );
+}
+
 /**
  * Post-process HTML to fix task list structure for Tiptap compatibility.
  * remark-gfm outputs: <li><input type="checkbox" ...> text</li>
@@ -199,8 +227,9 @@ export async function markdownToHtml(markdown: string, pagePath?: string): Promi
   // Encode spaces in file:// link URLs before remark (which terminates
   // bare URLs at whitespace)
   const withFileUrls = encodeFileUrls(markdown);
+  const withImageUrls = encodeBareRelativeImageDestinationSpaces(withFileUrls);
   // Convert ![[file.tex]] LaTeX embeds to HTML markers before remark
-  const withLatex = convertLatexEmbeds(withFileUrls);
+  const withLatex = convertLatexEmbeds(withImageUrls);
   // Pre-process wiki-links before remark (which would treat [[ as text)
   const preprocessed = convertWikiLinks(withLatex);
 
